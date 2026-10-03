@@ -4,11 +4,11 @@ Light, indigo-themed store (plickifyacademy-style): **Google login → buy via
 bKash/Nagad (TrxID) → admin approves → download from dashboard + license key →
 paste key into the desktop app**.
 
-Stack: **Vite + React + TS + Tailwind** (this folder) · **Supabase** (database,
+Stack: **Vite + React + TS + Tailwind** (this repo) · **Supabase** (database,
 auth, storage, edge functions) · **Vercel** (hosting).
 
 ```
-site/
+Plickify-Tools/
 ├── src/                      # React app (public store + dashboard + admin)
 ├── supabase/
 │   ├── migrations/0001_init.sql      # ← run this in Supabase SQL Editor
@@ -55,7 +55,7 @@ The desktop app talks to three edge functions. They use the built-in
 `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` plus one secret you set:
 
 ```powershell
-# from the site/ folder (Supabase CLI: npm i -g supabase, then supabase login)
+# from the repo root (Supabase CLI: npm i -g supabase, then supabase login)
 supabase secrets set LICENSE_TOKEN_SECRET=<long-random-string>
 # generate one, e.g.: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
 
@@ -80,10 +80,9 @@ user presses *Check Now*. Offline grace is **7 days** (`GRACE_DAYS`).
 ## 2. Local development
 
 ```powershell
-Copy-Item site\.env.example site\.env   # fill in Supabase URL + anon key
-cd site
+Copy-Item .env.example .env   # fill in Supabase URL + anon key
 npm install
-npm run dev                              # http://localhost:5173
+npm run dev                   # http://localhost:5173
 ```
 
 `.env`:
@@ -95,10 +94,10 @@ VITE_SUPABASE_ANON_KEY=<anon key>       # Project Settings → API
 
 ## 3. Deploy to Vercel
 
-1. Push this repo to **GitHub**.
+1. Push this repo to **GitHub** (done — <https://github.com/plickifyofficial/Plickify-Tools>).
 2. Vercel → **Add New Project** → import the repo →
    - **Framework Preset:** Vite
-   - **Root Directory:** `site`          ← important
+   - **Root Directory:** repository root (default — no `site/` subfolder here)
    - **Build Command:** `npm run build`  (default)
    - **Output Directory:** `dist`        (default)
 3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
@@ -109,15 +108,15 @@ VITE_SUPABASE_ANON_KEY=<anon key>       # Project Settings → API
 
 ## 4. Wire the desktop app to this backend
 
-In the **project root** (not `site/`), create `.env` (see `.env.example`):
+In the **desktop app project** (the Electron repo — separate from this website
+repo), create `.env` (see `.env.example`):
 
 ```
 ACTIVATION_API_URL=https://<PROJECT-REF>.supabase.co
 ACTIVATION_ANON_KEY=<anon key>
-ACTIVATION_ENABLED=1
 ```
 
-then rebuild (`npm run build`, or `npm run bundle` for the installer). Users
+then rebuild (`npm run build`, or `npm run dist` for the installer). Users
 paste the key from **dashboard → My License** into the app's activation screen.
 
 - `ACTIVATION_DISABLED=1` — skip the gate entirely (tests only).
