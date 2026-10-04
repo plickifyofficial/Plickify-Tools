@@ -1,7 +1,7 @@
 /**
  * firebase-admin bootstrap for the Vercel serverless functions.
  *
- * Uses the service-account JSON stored in the FIREBASE_SERVICE_ACCOUNT env
+ * Uses the service-account JSON stored in the FIREBASE_SERVICE_ACCOUNT_KEY env
  * var (Vercel dashboard → Settings → Environment Variables). The Admin SDK
  * bypasses security rules — only ever used inside api/, never in the browser.
  */
@@ -17,8 +17,8 @@ function ensureApp(): App {
     app = getApps()[0]
     return app
   }
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT
-  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT not set')
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_KEY
+  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_KEY not set')
   app = initializeApp({ credential: cert(JSON.parse(raw)) })
   return app
 }
