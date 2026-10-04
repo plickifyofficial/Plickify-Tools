@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { list, newest, where } from '../../lib/db'
 import { copyText, formatDate } from '../../lib/format'
 import type { License, LicenseDevice } from '../../lib/types'
 import { Badge, EmptyState, PageTitle, Spinner } from '../../components/ui'
@@ -14,16 +14,18 @@ export function MyLicense(): JSX.Element {
 
   const load = useCallback(async () => {
     if (!session) return
-    const { data } = await supabase
-      .from('licenses')
-      .select('*, license_devices(*)')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false })
-    const rows = (data as (License & { license_devices: LicenseDevice[] })[]) ?? []
-    setLicenses(rows)
-    const map: Record<string, LicenseDevice[]> = {}
-    for (const row of rows) map[row.id] = row.license_devices ?? []
-    setDevices(map)
+    try {
+      const [licRows, devRows] = await Promise.all([
+        list<License>('licenses', where('user_id', '==', session.user.id)),
+        list<LicenseDevice>('license_devices', where('user_id', '==', session.user.id))
+      ])
+      setLicenses(newest(licRows))
+      const map: Record<string, LicenseDevice[]> = {}
+      for (const d of devRows) (map[d.license_id] ??= []).push(d)
+      setDevices(map)
+    } catch (err) {
+      console.error('license load failed', err)
+    }
     setLoading(false)
   }, [session])
 

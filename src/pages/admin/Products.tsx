@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { insert, list, newest, nowIso, put, remove, update } from '../../lib/db'
 import { formatDate, taka } from '../../lib/format'
 import type { Product } from '../../lib/types'
 import { Badge, Modal, PageTitle, Spinner } from '../../components/ui'
@@ -13,6 +13,7 @@ interface ProductForm {
   version: string
   description: string
   is_active: boolean
+  file_url: string
 }
 
 const EMPTY_FORM: ProductForm = {
@@ -23,21 +24,29 @@ const EMPTY_FORM: ProductForm = {
   original_price: '',
   version: '',
   description: '',
-  is_active: true
+  is_active: true,
+  file_url: ''
 }
 
 export function AdminProducts(): JSX.Element {
   const [products, setProducts] = useState<Product[]>([])
+  const [fileUrls, setFileUrls] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<Product | 'new' | null>(null)
   const [form, setForm] = useState<ProductForm>(EMPTY_FORM)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [uploadingId, setUploadingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const { data } = await supabase.from('products').select('*').order('created_at', { ascending: false })
-    setProducts((data as Product[]) ?? [])
+    try {
+      const rows = await list<Product>('products')
+      setProducts(newest(rows))
+      // File URLs live in their own admin-only collection.
+      const files = await list<{ id: string; url: string }>('product_files')
+      setFileUrls(Object.fromEntries(files.map((f) => [f.id, f.url])))
+    } catch (err) {
+      console.error('products load failed', err)
+    }
     setLoading(false)
   }, [])
 
@@ -58,7 +67,8 @@ export function AdminProducts(): JSX.Element {
         original_price: target.original_price ? String(target.original_price) : '',
         version: target.version ?? '',
         description: target.description ?? '',
-        is_active: target.is_active
+        is_active: target.is_active,
+        file_url: fileUrls[target.id] ?? ''
       })
     }
     setEditing(target)
@@ -69,54 +79,51 @@ export function AdminProducts(): JSX.Element {
       setError('Name and price are required.')
       return
     }
+    const url = form.file_url.trim()
+    if (url && !/^https:\/\//i.test(url)) {
+      setError('Download URL must start with https://')
+      return
+    }
     setBusy(true)
     setError(null)
-    const payload = {
-      name: form.name.trim(),
-      slug: (form.slug.trim() || form.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')).replace(/^-|-$/g, ''),
-      category: form.category.trim() || null,
-      price: Number(form.price) || 0,
-      original_price: form.original_price ? Number(form.original_price) : null,
-      version: form.version.trim() || null,
-      description: form.description.trim() || null,
-      is_active: form.is_active
+    try {
+      const payload = {
+        name: form.name.trim(),
+        slug: (form.slug.trim() || form.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-')).replace(/^-|-$/g, ''),
+        category: form.category.trim() || null,
+        price: Number(form.price) || 0,
+        original_price: form.original_price ? Number(form.original_price) : null,
+        version: form.version.trim() || null,
+        description: form.description.trim() || null,
+        is_active: form.is_active
+      }
+      let productId: string
+      if (editing === 'new' || !editing) {
+        productId = await insert('products', { ...payload, download_count: 0, created_at: nowIso() })
+      } else {
+        productId = editing.id
+        await update('products', productId, payload)
+      }
+      // Keep the download URL in the admin-only product_files collection.
+      if (url) await put('product_files', productId, { url, updated_at: nowIso() })
+      else await remove('product_files', productId).catch(() => undefined)
+      setEditing(null)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save the product.')
     }
-    const result =
-      editing === 'new' || !editing
-        ? await supabase.from('products').insert(payload)
-        : await supabase.from('products').update(payload).eq('id', editing.id)
     setBusy(false)
-    if (result.error) {
-      setError(result.error.message)
-      return
-    }
-    setEditing(null)
-    await load()
   }
 
-  async function remove(product: Product): Promise<void> {
+  async function removeProduct(product: Product): Promise<void> {
     if (!window.confirm(`Delete "${product.name}"? Orders keep their history.`)) return
-    const { error: err } = await supabase.from('products').delete().eq('id', product.id)
-    if (err) setError(err.message)
-    else await load()
-  }
-
-  async function uploadFile(product: Product, file: File): Promise<void> {
-    setUploadingId(product.id)
-    setError(null)
-    const path = `${product.id}/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
-    const { error: uploadErr } = await supabase.storage.from('tool-files').upload(path, file, {
-      upsert: false
-    })
-    if (uploadErr) {
-      setError(`Upload failed: ${uploadErr.message}`)
-      setUploadingId(null)
-      return
+    try {
+      await remove('product_files', product.id).catch(() => undefined)
+      await remove('products', product.id)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed.')
     }
-    const { error: updateErr } = await supabase.from('products').update({ file_path: path }).eq('id', product.id)
-    setUploadingId(null)
-    if (updateErr) setError(updateErr.message)
-    else await load()
   }
 
   if (loading) return <Spinner label="Loading products…" />
@@ -125,8 +132,7 @@ export function AdminProducts(): JSX.Element {
     <div>
       <PageTitle
         title="Products"
-        subtitle="Tools users can buy — upload the file buyers will download."
-        // eslint-disable-next-line react/no-unescaped-entities
+        subtitle="Tools users can buy — paste the download URL (GitHub Release link) for each."
       />
 
       <div className="mb-4 flex justify-end">
@@ -165,34 +171,18 @@ export function AdminProducts(): JSX.Element {
                 </td>
                 <td className="px-5 py-3.5 font-bold text-slate-800">{taka(p.price)}</td>
                 <td className="px-5 py-3.5">
-                  <label className="cursor-pointer">
-                    <span
-                      className={`text-xs font-semibold ${p.file_path ? 'text-emerald-600' : 'text-brand-600 underline'}`}
-                    >
-                      <i
-                        className={
-                          uploadingId === p.id
-                            ? 'fa-solid fa-spinner fa-spin mr-1'
-                            : p.file_path
-                              ? 'fa-solid fa-file-circle-check mr-1'
-                              : 'fa-solid fa-upload mr-1'
-                        }
-                        aria-hidden="true"
-                      />
-                      {uploadingId === p.id ? 'Uploading…' : p.file_path ? 'Replace file' : 'Upload file'}
-                    </span>
-                    <input
-                      type="file"
-                      className="hidden"
-                      disabled={uploadingId === p.id}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file) void uploadFile(p, file)
-                        e.target.value = ''
-                      }}
+                  <span
+                    className={`text-xs font-semibold ${fileUrls[p.id] ? 'text-emerald-600' : 'text-brand-600 underline'}`}
+                  >
+                    <i
+                      className={fileUrls[p.id] ? 'fa-solid fa-file-circle-check mr-1' : 'fa-solid fa-link mr-1'}
+                      aria-hidden="true"
                     />
-                  </label>
-                  {p.file_path && <div className="mt-0.5 max-w-[160px] truncate text-[10px] text-slate-400">{p.file_path}</div>}
+                    {fileUrls[p.id] ? 'URL set' : 'No file URL'}
+                  </span>
+                  {fileUrls[p.id] && (
+                    <div className="mt-0.5 max-w-[220px] truncate text-[10px] text-slate-400">{fileUrls[p.id]}</div>
+                  )}
                 </td>
                 <td className="px-5 py-3.5">
                   <Badge tone={p.is_active ? 'green' : 'slate'}>{p.is_active ? 'Active' : 'Hidden'}</Badge>
@@ -204,7 +194,7 @@ export function AdminProducts(): JSX.Element {
                       <i className="fa-solid fa-pen" aria-hidden="true" />
                       Edit
                     </button>
-                    <button className="btn-danger px-3 py-1.5 text-xs" onClick={() => void remove(p)}>
+                    <button className="btn-danger px-3 py-1.5 text-xs" onClick={() => void removeProduct(p)}>
                       <i className="fa-solid fa-trash" aria-hidden="true" />
                       Delete
                     </button>
@@ -278,6 +268,22 @@ export function AdminProducts(): JSX.Element {
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
+          </div>
+          <div>
+            <label className="label">
+              <i className="fa-solid fa-link mr-1" aria-hidden="true" />
+              Download URL
+            </label>
+            <input
+              className="input font-mono text-xs"
+              placeholder="https://github.com/OWNER/REPO/releases/download/v1.0.0/file.zip"
+              value={form.file_url}
+              onChange={(e) => setForm({ ...form, file_url: e.target.value })}
+            />
+            <p className="mt-1 text-xs text-slate-400">
+              Upload the tool file to a GitHub Release first, then paste its direct link here. Buyers only get it after
+              payment approval.
+            </p>
           </div>
           <label className="flex items-center justify-between text-sm font-semibold text-slate-700">
             Visible on the store

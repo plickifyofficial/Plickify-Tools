@@ -1,0 +1,104 @@
+rules_version = '2';
+
+// ============================================================
+// Plickify Tools — Firestore security rules
+//
+// Paste this file in: Firebase console → Firestore → Rules
+// (or `firebase deploy --rules firestore.rules`).
+//
+// Design notes:
+//  - Profiles: users read/update their own (role locked); admins read all
+//    and can change roles. The FIRST admin must be promoted manually in the
+//    console (Rules playgound / doc edit): set profiles/<uid>.role = "admin".
+//  - Products: everyone reads ACTIVE ones only; admins read/write all.
+//  - Orders: buyers create their own pending orders (price + product
+//    checked server-side by rules), read their own; admins do the rest.
+//  - Licenses: owners read their own; admins manage.
+//  - license_devices: read if you own the license (user_id denormalized);
+//    writes happen only through the Vercel API (Admin SDK bypasses rules).
+//  - site_settings: read for everyone (payment numbers shown pre-login),
+//    write for admins. One doc per key: { key, value }.
+//  - product_files: the real download URL — admin-only, never readable by
+//    buyers (the /api/download function checks orders server-side).
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && get(/databases/$(database)/documents/profiles/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // ---------------- profiles ----------------
+    match /profiles/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isOwner(uid)
+        && request.resource.data.role in ['user', 'staff', 'admin']
+        && request.resource.data.email == request.auth.token.email;
+      // Users may edit their own profile but NEVER change the role field.
+      allow update: if isAdmin()
+        || (isOwner(uid)
+            && request.resource.data.role == resource.data.role
+            && request.resource.data.id == resource.data.id);
+      allow delete: if isAdmin();
+    }
+
+    // ---------------- products (store) ----------------
+    match /products/{id} {
+      allow read: if isAdmin() || resource.data.is_active == true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------------- orders (bKash/Nagad payments) ----------------
+    match /orders/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.user_id == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.user_id == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.amount is number
+        && request.resource.data.amount >= 0
+        && request.resource.data.method in ['bkash', 'nagad']
+        && request.resource.data.trx_id is string
+        && request.resource.data.trx_id.size() >= 6
+        && (/^[A-Za-z0-9-]{6,64}$/.test(request.resource.data.trx_id))
+        && request.resource.data.product_name is string;
+      // Only admins approve/reject/delete.
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------------- licenses ----------------
+    match /licenses/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.user_id == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ---------------- license devices ----------------
+    match /license_devices/{id} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.user_id == request.auth.uid);
+      // Written only by the Vercel activation API (Admin SDK).
+      allow write: if isAdmin();
+    }
+
+    // ---------------- download file URLs (admin-only) ----------------
+    match /product_files/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    // ---------------- site settings ----------------
+    match /site_settings/{key} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

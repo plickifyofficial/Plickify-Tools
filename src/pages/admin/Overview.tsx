@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { count, list, newest, sumOf, where } from '../../lib/db'
 import { formatDate, taka } from '../../lib/format'
-import type { Order } from '../../lib/types'
+import type { Order, Profile, Product } from '../../lib/types'
 import { Badge, PageTitle, Spinner, StatCard } from '../../components/ui'
 
 const STATUS_TONE = { pending: 'amber', approved: 'green', rejected: 'red' } as const
@@ -13,24 +13,30 @@ export function AdminOverview(): JSX.Element {
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
-    const [usersRes, productsRes, pendingRes, approvedRes] = await Promise.all([
-      supabase.from('profiles').select('id', { count: 'exact', head: true }),
-      supabase.from('products').select('id', { count: 'exact', head: true }),
-      supabase
-        .from('orders')
-        .select('*, product:products(name), buyer:profiles(email, full_name)')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false }),
-      supabase.from('orders').select('amount').eq('status', 'approved')
-    ])
-    const approved = (approvedRes.data as { amount: number }[]) ?? []
-    setStats({
-      users: usersRes.count ?? 0,
-      products: productsRes.count ?? 0,
-      pending: pendingRes.data?.length ?? 0,
-      revenue: approved.reduce((sum, o) => sum + Number(o.amount), 0)
-    })
-    setPendingOrders((pendingRes.data as Order[]) ?? [])
+    try {
+      const [users, products, pendingRows, revenue] = await Promise.all([
+        count('profiles'),
+        count('products'),
+        list<Order>('orders', where('status', '==', 'pending')),
+        sumOf('orders', 'amount', where('status', '==', 'approved'))
+      ])
+      const sortedPending = newest(pendingRows)
+      // Buyer + product labels come from separate collections (no joins in Firestore).
+      const [profiles, productRows] = await Promise.all([
+        list<Profile>('profiles'),
+        list<Product>('products')
+      ])
+      const buyerById = new Map(profiles.map((p) => [p.id, p]))
+      const productById = new Map(productRows.map((p) => [p.id, p]))
+      for (const o of sortedPending) {
+        o.buyer = buyerById.get(o.user_id) ?? null
+        o.product = productById.get(o.product_id) ?? null
+      }
+      setStats({ users, products, pending: pendingRows.length, revenue })
+      setPendingOrders(sortedPending)
+    } catch (err) {
+      console.error('admin overview load failed', err)
+    }
     setLoading(false)
   }, [])
 
@@ -75,7 +81,7 @@ export function AdminOverview(): JSX.Element {
                 className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-100 px-4 py-3 text-sm"
               >
                 <div>
-                  <span className="font-semibold text-slate-800">{o.product?.name ?? 'Tool'}</span>
+                  <span className="font-semibold text-slate-800">{o.product?.name ?? o.product_name ?? 'Tool'}</span>
                   <span className="ml-2 text-slate-400">
                     {o.buyer?.full_name || o.buyer?.email} · {formatDate(o.created_at)}
                   </span>

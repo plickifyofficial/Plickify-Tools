@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { list, newest, update, where } from '../../lib/db'
 import { formatDate, taka } from '../../lib/format'
-import type { Order, OrderStatus } from '../../lib/types'
+import type { Order, OrderStatus, Profile, Product } from '../../lib/types'
 import { Badge, PageTitle, Spinner } from '../../components/ui'
 
 const STATUS_TONE = { pending: 'amber', approved: 'green', rejected: 'red' } as const
@@ -20,15 +20,23 @@ export function AdminOrders(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    let query = supabase
-      .from('orders')
-      .select('*, product:products(name), buyer:profiles(email, full_name)')
-      .order('created_at', { ascending: false })
-      .limit(200)
-    if (filter !== 'all') query = query.eq('status', filter)
-    const { data, error: err } = await query
-    if (err) setError(err.message)
-    setOrders((data as Order[]) ?? [])
+    try {
+      const constraints = filter === 'all' ? [] : [where('status', '==', filter)]
+      const [orderRows, profiles, productRows] = await Promise.all([
+        list<Order>('orders', ...constraints),
+        list<Profile>('profiles'),
+        list<Product>('products')
+      ])
+      const buyerById = new Map(profiles.map((p) => [p.id, p]))
+      const productById = new Map(productRows.map((p) => [p.id, p]))
+      for (const o of orderRows) {
+        o.buyer = buyerById.get(o.user_id) ?? null
+        o.product = productById.get(o.product_id) ?? null
+      }
+      setOrders(newest(orderRows).slice(0, 200))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load orders.')
+    }
     setLoading(false)
   }, [filter])
 
@@ -40,12 +48,14 @@ export function AdminOrders(): JSX.Element {
   async function setStatus(id: string, status: OrderStatus): Promise<void> {
     setBusyId(id)
     setError(null)
-    const { error: err } = await supabase.from('orders').update({ status }).eq('id', id)
-    setBusyId(null)
-    if (err) {
-      setError(err.message)
+    try {
+      await update('orders', id, { status })
+    } catch (err) {
+      setBusyId(null)
+      setError(err instanceof Error ? err.message : 'Update failed.')
       return
     }
+    setBusyId(null)
     setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status } : o)))
   }
 
@@ -99,7 +109,7 @@ export function AdminOrders(): JSX.Element {
                     <div className="font-semibold text-slate-800">{o.buyer?.full_name || '—'}</div>
                     <div className="text-xs text-slate-400">{o.buyer?.email}</div>
                   </td>
-                  <td className="px-5 py-3.5 font-semibold text-slate-800">{o.product?.name ?? 'Tool'}</td>
+                  <td className="px-5 py-3.5 font-semibold text-slate-800">{o.product?.name ?? o.product_name ?? 'Tool'}</td>
                   <td className="px-5 py-3.5">
                     <div className="capitalize text-slate-600">{o.method}</div>
                     <div className="font-mono text-xs text-slate-500">{o.trx_id}</div>

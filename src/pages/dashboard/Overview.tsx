@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { list, newest, where } from '../../lib/db'
 import { formatDate, taka } from '../../lib/format'
 import type { License, Order } from '../../lib/types'
 import { Badge, PageTitle, StatCard } from '../../components/ui'
@@ -15,17 +15,16 @@ export function DashboardOverview(): JSX.Element {
 
   const load = useCallback(async () => {
     if (!session) return
-    const [licRes, ordRes] = await Promise.all([
-      supabase.from('licenses').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
-      supabase
-        .from('orders')
-        .select('*, product:products(*)')
-        .eq('user_id', session.user.id)
-        .order('created_at', { ascending: false })
-        .limit(5)
-    ])
-    setLicenses((licRes.data as License[]) ?? [])
-    setOrders((ordRes.data as Order[]) ?? [])
+    try {
+      const [licRows, ordRows] = await Promise.all([
+        list<License>('licenses', where('user_id', '==', session.user.id)),
+        list<Order>('orders', where('user_id', '==', session.user.id))
+      ])
+      setLicenses(newest(licRows))
+      setOrders(newest(ordRows).slice(0, 5))
+    } catch (err) {
+      console.error('dashboard load failed', err)
+    }
   }, [session])
 
   useEffect(() => {
@@ -127,7 +126,7 @@ export function DashboardOverview(): JSX.Element {
               {orders.map((o) => (
                 <div key={o.id} className="flex items-center justify-between text-sm">
                   <div className="min-w-0">
-                    <div className="truncate font-semibold text-slate-800">{o.product?.name ?? 'Tool'}</div>
+                    <div className="truncate font-semibold text-slate-800">{o.product_name ?? 'Tool'}</div>
                     <div className="text-xs text-slate-400">
                       {formatDate(o.created_at)} · {taka(Number(o.amount))}
                     </div>

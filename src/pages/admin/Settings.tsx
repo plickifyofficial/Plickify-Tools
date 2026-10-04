@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase, backendConfigured } from '../../lib/supabase'
+import { backendConfigured } from '../../lib/firebase'
+import { list, put } from '../../lib/db'
 import { PageTitle, Spinner } from '../../components/ui'
 
 interface SettingField {
@@ -31,10 +32,14 @@ export function AdminSettings(): JSX.Element {
       setLoading(false)
       return
     }
-    const { data } = await supabase.from('site_settings').select('*')
-    const map: Record<string, string> = {}
-    for (const row of (data as { key: string; value: string }[]) ?? []) map[row.key] = row.value
-    setValues(map)
+    try {
+      const rows = await list<{ key: string; value: string }>('site_settings')
+      const map: Record<string, string> = {}
+      for (const row of rows) map[row.key] = row.value
+      setValues(map)
+    } catch (err) {
+      console.error('settings load failed', err)
+    }
     setLoading(false)
   }, [])
 
@@ -46,14 +51,15 @@ export function AdminSettings(): JSX.Element {
     setSaving(true)
     setSaved(false)
     setError(null)
-    const rows = FIELDS.map((f) => ({ key: f.key, value: values[f.key] ?? '' }))
-    const { error: err } = await supabase.from('site_settings').upsert(rows, { onConflict: 'key' })
-    setSaving(false)
-    if (err) setError(err.message)
-    else {
+    try {
+      // One doc per key (doc id = key).
+      await Promise.all(FIELDS.map((f) => put('site_settings', f.key, { key: f.key, value: values[f.key] ?? '' })))
       setSaved(true)
       setTimeout(() => setSaved(false), 2500)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save settings.')
     }
+    setSaving(false)
   }
 
   if (loading) return <Spinner label="Loading settings…" />
@@ -61,13 +67,6 @@ export function AdminSettings(): JSX.Element {
   return (
     <div>
       <PageTitle title="Site Settings" subtitle="Payment numbers, support info and banners." />
-
-      {!backendConfigured && (
-        <div className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          <i className="fa-solid fa-triangle-exclamation mr-1.5" aria-hidden="true" />
-          Backend not configured — add Supabase keys to <code>site/.env</code> first.
-        </div>
-      )}
 
       <div className="card max-w-2xl p-6">
         <div className="space-y-5">
@@ -101,7 +100,7 @@ export function AdminSettings(): JSX.Element {
         )}
 
         <div className="mt-6 flex items-center gap-4">
-          <button className="btn-primary" onClick={() => void save()} disabled={saving || !backendConfigured}>
+          <button className="btn-primary" onClick={() => void save()} disabled={saving}>
             <i className={saving ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-floppy-disk'} aria-hidden="true" />
             {saving ? 'Saving…' : 'Save Settings'}
           </button>

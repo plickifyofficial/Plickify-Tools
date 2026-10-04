@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { list, newest, where } from '../../lib/db'
 import { formatDate, taka } from '../../lib/format'
 import type { Order } from '../../lib/types'
 import { Badge, EmptyState, PageTitle, Spinner } from '../../components/ui'
@@ -16,12 +16,12 @@ export function Orders(): JSX.Element {
 
   const load = useCallback(async () => {
     if (!session) return
-    const { data } = await supabase
-      .from('orders')
-      .select('*, product:products(name, price)')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false })
-    setOrders((data as Order[]) ?? [])
+    try {
+      const rows = await list<Order>('orders', where('user_id', '==', session.user.id))
+      setOrders(newest(rows))
+    } catch (err) {
+      console.error('orders load failed', err)
+    }
     setLoading(false)
   }, [session])
 
@@ -53,7 +53,7 @@ export function Orders(): JSX.Element {
             <tbody className="divide-y divide-slate-100">
               {orders.map((o) => (
                 <tr key={o.id} className="hover:bg-slate-50/60">
-                  <td className="px-5 py-3.5 font-semibold text-slate-800">{o.product?.name ?? 'Tool'}</td>
+                  <td className="px-5 py-3.5 font-semibold text-slate-800">{o.product_name ?? 'Tool'}</td>
                   <td className="px-5 py-3.5 text-slate-500">{formatDate(o.created_at)}</td>
                   <td className="px-5 py-3.5 capitalize text-slate-500">{o.method}</td>
                   <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{o.trx_id}</td>

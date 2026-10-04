@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase, backendConfigured } from '../lib/supabase'
+import { backendConfigured } from '../lib/firebase'
+import { insert, list, newest, nowIso, where } from '../lib/db'
 import { taka } from '../lib/format'
 import type { PaymentMethod, Product } from '../lib/types'
 import { Badge, Modal, PageTitle, Spinner } from '../components/ui'
@@ -19,14 +20,18 @@ export function Tools(): JSX.Element {
       setLoading(false)
       return
     }
-    const [productsRes, settingsRes] = await Promise.all([
-      supabase.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }),
-      supabase.from('site_settings').select('*')
-    ])
-    setProducts((productsRes.data as Product[]) ?? [])
-    const map: Record<string, string> = {}
-    for (const row of (settingsRes.data as { key: string; value: string }[]) ?? []) map[row.key] = row.value
-    setSettings(map)
+    try {
+      const [productRows, settingRows] = await Promise.all([
+        list<Product>('products', where('is_active', '==', true)),
+        list<{ key: string; value: string }>('site_settings')
+      ])
+      setProducts(newest(productRows))
+      const map: Record<string, string> = {}
+      for (const row of settingRows) map[row.key] = row.value
+      setSettings(map)
+    } catch (err) {
+      console.error('store load failed', err)
+    }
     setLoading(false)
   }, [])
 
@@ -132,19 +137,23 @@ function BuyModal({
     }
     setBusy(true)
     setError(null)
-    const { error: insertError } = await supabase.from('orders').insert({
-      user_id: session.user.id,
-      product_id: product.id,
-      amount: product.price,
-      method,
-      trx_id: trxId.trim(),
-      status: 'pending'
-    })
-    setBusy(false)
-    if (insertError) {
-      setError(insertError.message)
+    try {
+      await insert('orders', {
+        user_id: session.user.id,
+        product_id: product.id,
+        product_name: product.name,
+        amount: product.price,
+        method,
+        trx_id: trxId.trim(),
+        status: 'pending',
+        created_at: nowIso()
+      })
+    } catch (err) {
+      setBusy(false)
+      setError(err instanceof Error ? err.message : 'Could not submit the order.')
       return
     }
+    setBusy(false)
     setTrxId('')
     onOrdered()
   }

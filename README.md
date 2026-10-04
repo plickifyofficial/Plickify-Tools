@@ -4,137 +4,157 @@ Light, indigo-themed store (plickifyacademy-style): **Google login → buy via
 bKash/Nagad (TrxID) → admin approves → download from dashboard + license key →
 paste key into the desktop app**.
 
-Stack: **Vite + React + TS + Tailwind** (this repo) · **Supabase** (database,
-auth, storage, edge functions) · **Vercel** (hosting).
+Stack: **Vite + React + TS + Tailwind** (this repo) · **Firebase** (Google auth +
+Firestore) · **Vercel** (hosting + serverless license/download API) ·
+**GitHub Releases** (tool files).
 
 ```
 Plickify-Tools/
 ├── src/                      # React app (public store + dashboard + admin)
-├── supabase/
-│   ├── migrations/0001_init.sql      # ← run this in Supabase SQL Editor
-│   └── functions/                    # license-activate / validate / deactivate
-├── vercel.json               # SPA rewrite
-└── .env.example              # copy to .env for local dev
+│   └── lib/firebase.ts       # ← Firebase web config (public, baked in)
+├── firestore.rules           # ← paste into Firebase console (security rules)
+├── api/                      # Vercel serverless functions
+│   ├── license-activate.ts   #   desktop-app activation
+│   ├── license-validate.ts   #   24h revalidation (7-day offline grace)
+│   ├── license-deactivate.ts #   free a device seat
+│   └── download.ts           #   gated file download (checks approved order)
+├── vercel.json               # SPA rewrite + /functions/v1/:fn → /api/:fn
+└── .env.example              # server-side env vars (set in Vercel dashboard)
 ```
+
+> Why this shape? Firebase **Storage and Cloud Functions need the paid Blaze
+> plan** — this design runs 100% on the free tier: Firebase Auth + Firestore
+> Spark plan, Vercel serverless functions, files on GitHub Releases.
 
 ---
 
-## 1. Supabase setup
+## 1. Firebase setup (one time)
 
-1. Create a project at <https://supabase.com> (choose a region near Bangladesh,
-   e.g. Singapore `ap-southeast-1`).
-2. **SQL Editor → New query → paste all of
-   `supabase/migrations/0001_init.sql` → Run.**
-   This creates: `profiles`, `products`, `orders`, `licenses`,
-   `license_devices`, `site_settings`, all RLS policies, the profile-creation
-   trigger, the private `tool-files` storage bucket + policies.
-3. **Make yourself admin** (SQL Editor, replace the email — you must sign in on
-   the site once first so your profile row exists):
+Project: **`plickify-official`** (web config already baked into
+`src/lib/firebase.ts` — that config is public by design).
 
-   ```sql
-   update public.profiles set role = 'admin' where email = 'you@gmail.com';
-   ```
+1. **Enable Google login:** Firebase console → *Authentication → Get started →
+   Sign-in method → Google → Enable → Save.*
+2. **Create the database:** *Firestore Database → Create database →*
+   start in **production mode** → pick a region near Bangladesh
+   (e.g. `asia-south1` or `asia-southeast1`).
+3. **Paste the security rules:** *Firestore → Rules* → replace everything with
+   the contents of **`firestore.rules`** → *Publish*.
+   (Or CLI: `firebase login && firebase deploy --rules firestore.rules`.)
+4. **Make yourself admin** (do this AFTER you sign in on the site once, so
+   your profile exists): Firestore → *Data* → open `profiles/<your-uid>` →
+   edit field `role` → set it to `admin` → *Update*.
+5. **Service account key** (for the Vercel API): *Project settings → Service
+   accounts → Generate new private key* → save the JSON file.
+6. **Authorized domains:** *Authentication → Settings → Authorized domains* →
+   add your Vercel domain (e.g. `plickify-tools.vercel.app`) and
+   `localhost` (already there) → Save. **Google login 401s without this.**
 
-### Google login
-
-1. Supabase → **Authentication → Providers → Google → enable**.
-2. Google Cloud Console → <https://console.cloud.google.com/apis/credentials>
-   → create an **OAuth 2.0 Client ID (Web application)**:
-   - Authorized redirect URI:
-     `https://<PROJECT-REF>.supabase.co/auth/v1/callback`
-3. Paste client ID + secret into Supabase, then
-   **Authentication → URL Configuration**: add your site URL
-   (`http://localhost:5173` while developing, your Vercel domain after deploy)
-   to *Redirect URLs*.
-
-Only Google is enabled (by design).
-
-### Secrets + edge functions (app activation)
-
-The desktop app talks to three edge functions. They use the built-in
-`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` plus one secret you set:
-
-```powershell
-# from the repo root (Supabase CLI: npm i -g supabase, then supabase login)
-supabase secrets set LICENSE_TOKEN_SECRET=<long-random-string>
-# generate one, e.g.: node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"
-
-supabase functions deploy license-activate
-supabase functions deploy license-validate
-supabase functions deploy license-deactivate
-```
-
-> The app authenticates with the **anon key**, which is a valid JWT, so the
-> default `--verify-jwt` setting works as-is.
-
-| Function | App call | Success | Failures (HTTP 4xx + `code`) |
-|---|---|---|---|
-| `license-activate` | paste key in the app | `{token, label, graceDays}` | `not_found`, `revoked`, `expired`, `device_limit`, `device_revoked` |
-| `license-validate` | every 24h while running | `{graceDays}` | `invalid_token`, `token_expired`, `revoked`, `device_revoked` |
-| `license-deactivate` | Settings → Deactivate | `{ok:true}` | `invalid_token` |
-
-Token = HMAC-SHA256 signed (license id + device id + 90-day expiry). Admin
-**Revoke** takes effect at the next validate (≤24 h), or immediately if the
-user presses *Check Now*. Offline grace is **7 days** (`GRACE_DAYS`).
+Collections used (created automatically on first write):
+`profiles`, `products`, `orders`, `licenses`, `license_devices`,
+`product_files`, `site_settings`.
 
 ## 2. Local development
 
 ```powershell
-Copy-Item .env.example .env   # fill in Supabase URL + anon key
 npm install
-npm run dev                   # http://localhost:5173
+npm run dev          # http://localhost:5173  (no .env needed)
 ```
 
-`.env`:
+`npm run dev` shows the store; **Google login only works** once step 1.6
+(`localhost` authorized domain) is done. The `api/` functions are Vercel-only —
+use `vercel dev` if you need them locally.
 
-```
-VITE_SUPABASE_URL=https://<PROJECT-REF>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon key>       # Project Settings → API
-```
+## 3. Deploy to Vercel + connect Firebase
 
-## 3. Deploy to Vercel
-
-1. Push this repo to **GitHub** (done — <https://github.com/plickifyofficial/Plickify-Tools>).
+1. Push this repo to GitHub → <https://github.com/plickifyofficial/Plickify-Tools>.
 2. Vercel → **Add New Project** → import the repo →
    - **Framework Preset:** Vite
-   - **Root Directory:** repository root (default — no `site/` subfolder here)
-   - **Build Command:** `npm run build`  (default)
-   - **Output Directory:** `dist`        (default)
-3. Env vars: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`.
-4. Deploy. `vercel.json` already contains the SPA rewrite, so
-   `/dashboard/*` deep links work.
-5. Back in Supabase → Authentication → URL Configuration → add the Vercel URL
-   to *Redirect URLs*.
+   - **Build Command:** `npm run build` (default) · **Output:** `dist` (default)
+3. **Environment variables** (Settings → Environment Variables) — all three:
+
+   | Name | Value |
+   |---|---|
+   | `FIREBASE_SERVICE_ACCOUNT_KEY` | *paste the whole service-account JSON file content* |
+   | `LICENSE_TOKEN_SECRET` | long random string, e.g. `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+   | `GITHUB_TOKEN` | *(optional)* `repo`-scoped PAT — only needed for **private** release assets |
+
+4. **Deploy.** `vercel.json` rewrites keep two contract surfaces alive:
+   - `/dashboard/*` SPA deep links → `index.html`
+   - `/functions/v1/<fn>` → `/api/<fn>` → the old Supabase-style URLs the
+     desktop app already calls (app needs **no code change**).
+5. Back in Firebase → *Authentication → Authorized domains* → add the Vercel
+   domain (step 1.6).
+
+### Tool files on GitHub Releases
+
+Uploads now live on **GitHub Releases** (free, unlimited bandwidth) instead of
+Supabase Storage:
+
+```powershell
+# one-time: a (private or public) repo to hold the files
+gh repo create Plickify-Files --private
+
+# per release (gh CLI is already authenticated):
+gh release create v1.0.0 "C:\path\to\Firefox Automation Manager-Setup-1.0.0.exe" `
+  --repo plickifyofficial/Plickify-Files --title "FAM 1.0.0"
+```
+
+Copy the asset URL
+(`https://github.com/plickifyofficial/Plickify-Files/releases/download/v1.0.0/...`)
+→ **Admin → Products → Edit → Download URL**. With a *private* repo, set
+`GITHUB_TOKEN` in Vercel so the API can mint short-lived signed URLs; public
+repo assets work without it. The URL is stored in the admin-only
+`product_files` collection — buyers never see it, only `/api/download`
+serves it after checking their order.
 
 ## 4. Wire the desktop app to this backend
 
-In the **desktop app project** (the Electron repo — separate from this website
-repo), create `.env` (see `.env.example`):
+In the **desktop app repo** (separate from this website), `.env`:
 
 ```
-ACTIVATION_API_URL=https://<PROJECT-REF>.supabase.co
-ACTIVATION_ANON_KEY=<anon key>
+ACTIVATION_API_URL=https://<your-vercel-domain>
+ACTIVATION_ANON_KEY=AIzaSyCR2B0AHmknSuJ50nmGPUeIGA_FdLyANKQ
 ```
 
-then rebuild (`npm run build`, or `npm run dist` for the installer). Users
-paste the key from **dashboard → My License** into the app's activation screen.
+`ACTIVATION_ANON_KEY` just needs to be **non-empty** (use the public Firebase
+web API key above); the functions ignore it. Rebuild
+(`npm run build`, or `npm run dist` for the installer). Users paste the key
+from **dashboard → My License** into the app's activation screen.
 
 - `ACTIVATION_DISABLED=1` — skip the gate entirely (tests only).
 - `ACTIVATION_FORCE=1` — preview the activation screen in dev builds.
 - Unconfigured **dev** builds bypass the gate; unconfigured **packaged** builds
   are blocked (so a shipped installer can never run unprotected).
 
+| App call (unchanged URL shape) | Success | Failures (HTTP 4xx + `code`) |
+|---|---|---|
+| `POST …/functions/v1/license-activate` | `{token, label, graceDays}` | `not_found`, `revoked`, `expired`, `device_limit`, `device_revoked` |
+| `POST …/functions/v1/license-validate` | `{graceDays}` | `invalid_token`, `token_expired`, `revoked`, `device_revoked` |
+| `POST …/functions/v1/license-deactivate` | `{ok:true}` | `invalid_token` |
+
+Token = HMAC-SHA256 signed (license id + device id + 90-day expiry). Admin
+**Revoke** takes effect at the next validate (≤24 h), or immediately if the
+user presses *Check Now*. Offline grace is **7 days** (`GRACE_DAYS`).
+
 ## 5. Day-to-day admin
 
 Everything is driven from **`/admin`** (role `admin`):
 
 - **Orders** → verify TrxID → *Approve* (unlocks download) / *Reject*.
-- **Products** → create/edit, upload the file buyers download
-  (stored in the private `tool-files` bucket), hide/show, delete.
+- **Products** → create/edit, paste the GitHub Release **Download URL**,
+  hide/show, delete.
 - **Licenses** → issue keys (email + tool + device count), revoke/restore,
-  revoke individual devices.
+  revoke individual devices, delete.
 - **Users** → change roles (`user`/`staff`/`admin`).
 - **Settings** → bKash/Nagad numbers, payment note, support contact, banner.
 
 Payment flow: buyer pays *Send Money* → submits TrxID on the Buy modal → you
 approve → their dashboard shows **Download** + license key.
+
+## Notes
+
+- Firestore queries here use **only equality filters** — no composite indexes
+  to create; sorting happens client-side (data sets are small).
+- The Firestore web API key in `src/lib/firebase.ts` is **not a secret** —
+  security comes from `firestore.rules`, never from hiding the config.

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { supabase, backendConfigured } from '../lib/supabase'
+import { backendConfigured } from '../lib/firebase'
+import { list, newest, where } from '../lib/db'
 import { taka } from '../lib/format'
 import type { Product } from '../lib/types'
 import { Badge } from '../components/ui'
@@ -59,13 +60,9 @@ export function Home(): JSX.Element {
 
   useEffect(() => {
     if (!backendConfigured) return
-    void supabase
-      .from('products')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(6)
-      .then(({ data }) => setProducts((data as Product[]) ?? []))
+    void list<Product>('products', where('is_active', '==', true))
+      .then((rows) => setProducts(newest(rows).slice(0, 6)))
+      .catch((err: unknown) => console.error('products load failed', err))
   }, [])
 
   return (

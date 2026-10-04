@@ -24,13 +24,13 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** Random license-style key: FAMX-XXXX-XXXX-XXXX. */
-export function randomLicenseKey(prefix = 'FAM'): string {
+/** Random license key: PFT-XXXX-XXXX-XXXX-XXXX (matches KEY_PATTERN in api/). */
+export function randomLicenseKey(prefix = 'PFT'): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-  const bytes = new Uint8Array(12)
+  const bytes = new Uint8Array(16)
   crypto.getRandomValues(bytes)
   const groups: string[] = []
-  for (let g = 0; g < 3; g++) {
+  for (let g = 0; g < 4; g++) {
     let s = ''
     for (let i = 0; i < 4; i++) s += alphabet[bytes[g * 4 + i] % alphabet.length]
     groups.push(s)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { list, newest, update } from '../../lib/db'
 import { formatDate } from '../../lib/format'
 import type { Profile, Role } from '../../lib/types'
 import { Badge, PageTitle, Spinner } from '../../components/ui'
@@ -18,13 +18,12 @@ export function AdminUsers(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const { data, error: err } = await supabase
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false })
-      .limit(500)
-    if (err) setError(err.message)
-    setUsers((data as Profile[]) ?? [])
+    try {
+      const rows = await list<Profile>('profiles')
+      setUsers(newest(rows).slice(0, 500))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load users.')
+    }
     setLoading(false)
   }, [])
 
@@ -36,10 +35,15 @@ export function AdminUsers(): JSX.Element {
     if (!window.confirm(`Set role of this user to "${role}"?`)) return
     setBusyId(id)
     setError(null)
-    const { error: err } = await supabase.from('profiles').update({ role }).eq('id', id)
+    try {
+      await update('profiles', id, { role })
+    } catch (err) {
+      setBusyId(null)
+      setError(err instanceof Error ? err.message : 'Update failed.')
+      return
+    }
     setBusyId(null)
-    if (err) setError(err.message)
-    else setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)))
+    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, role } : u)))
   }
 
   const filtered = users.filter((u) => {
@@ -127,8 +131,8 @@ export function AdminUsers(): JSX.Element {
       </div>
 
       <p className="mt-4 text-xs text-slate-400">
-        Only admins can access this panel (enforced by database RLS). Promote yourself from SQL if you locked
-        yourself out.
+        Only admins can access this panel (enforced by Firestore security rules). Promote yourself from the Firebase
+        console if you locked yourself out.
       </p>
     </div>
   )
