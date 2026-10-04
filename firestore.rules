@@ -42,8 +42,11 @@ service cloud.firestore {
     match /profiles/{uid} {
       allow get: if isOwner(uid) || isAdmin();
       allow list: if isAdmin();
+      // First sign-in: the doc is created by the app with role locked to
+      // 'user'. Admins are promoted manually in the Firebase console
+      // (console writes bypass rules).
       allow create: if isOwner(uid)
-        && request.resource.data.role in ['user', 'staff', 'admin']
+        && request.resource.data.role == 'user'
         && request.resource.data.email == request.auth.token.email;
       // Users may edit their own profile but NEVER change the role field.
       allow update: if isAdmin()
@@ -66,12 +69,15 @@ service cloud.firestore {
         && request.resource.data.user_id == request.auth.uid
         && request.resource.data.status == 'pending'
         && request.resource.data.amount is number
-        && request.resource.data.amount >= 0
         && request.resource.data.method in ['bkash', 'nagad']
         && request.resource.data.trx_id is string
         && request.resource.data.trx_id.size() >= 6
         && (/^[A-Za-z0-9-]{6,64}$/.test(request.resource.data.trx_id))
-        && request.resource.data.product_name is string;
+        && request.resource.data.product_name is string
+        // Price + visibility come from the product doc, never the client.
+        && request.resource.data.amount ==
+             get(/databases/$(database)/documents/products/$(request.resource.data.product_id)).data.price
+        && get(/databases/$(database)/documents/products/$(request.resource.data.product_id)).data.is_active == true;
       // Only admins approve/reject/delete.
       allow update, delete: if isAdmin();
     }
