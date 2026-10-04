@@ -135,6 +135,10 @@ function BuyModal({
       setError('Enter the TrxID from your payment confirmation SMS.')
       return
     }
+    if (!/^[A-Za-z0-9-]{6,64}$/.test(trxId.trim())) {
+      setError('TrxID should be 6–64 letters/digits/dashes only (e.g. 9F7A2K1XYZ).')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
