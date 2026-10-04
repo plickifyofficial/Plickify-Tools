@@ -72,7 +72,7 @@ service cloud.firestore {
         && request.resource.data.method in ['bkash', 'nagad']
         && request.resource.data.trx_id is string
         && request.resource.data.trx_id.size() >= 6
-        && (/^[A-Za-z0-9-]{6,64}$/.test(request.resource.data.trx_id))
+        && request.resource.data.trx_id.size() <= 64
         && request.resource.data.product_name is string
         // Price + visibility come from the product doc, never the client.
         && request.resource.data.amount ==
