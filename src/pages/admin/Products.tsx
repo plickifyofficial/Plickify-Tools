@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { insert, list, newest, nowIso, put, remove, update } from '../../lib/db'
 import { formatDate, taka } from '../../lib/format'
 import type { Product } from '../../lib/types'
-import { Badge, Modal, PageTitle, Spinner } from '../../components/ui'
+import { Badge, Modal, PageTitle, Spinner, Thumb } from '../../components/ui'
 
 interface ProductForm {
   name: string
@@ -12,6 +12,7 @@ interface ProductForm {
   original_price: string
   version: string
   description: string
+  image_url: string
   is_active: boolean
   file_url: string
 }
@@ -24,6 +25,7 @@ const EMPTY_FORM: ProductForm = {
   original_price: '',
   version: '',
   description: '',
+  image_url: '',
   is_active: true,
   file_url: ''
 }
@@ -67,6 +69,7 @@ export function AdminProducts(): JSX.Element {
         original_price: target.original_price ? String(target.original_price) : '',
         version: target.version ?? '',
         description: target.description ?? '',
+        image_url: target.image_url ?? '',
         is_active: target.is_active,
         file_url: fileUrls[target.id] ?? ''
       })
@@ -84,6 +87,11 @@ export function AdminProducts(): JSX.Element {
       setError('Download URL must start with https://')
       return
     }
+    const image = form.image_url.trim()
+    if (image && !/^(https:\/\/|\/)/i.test(image)) {
+      setError('Preview image URL must start with https:// or /')
+      return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -95,6 +103,7 @@ export function AdminProducts(): JSX.Element {
         original_price: form.original_price ? Number(form.original_price) : null,
         version: form.version.trim() || null,
         description: form.description.trim() || null,
+        image_url: image || null,
         is_active: form.is_active
       }
       let productId: string
@@ -164,9 +173,21 @@ export function AdminProducts(): JSX.Element {
             {products.map((p) => (
               <tr key={p.id} className="hover:bg-slate-50/60">
                 <td className="px-5 py-3.5">
-                  <div className="font-semibold text-slate-800">{p.name}</div>
-                  <div className="text-xs text-slate-400">
-                    {p.category ?? 'uncategorized'} {p.version ? `· v${p.version}` : ''}
+                  <div className="flex items-center gap-3">
+                    {p.image_url && (
+                      <Thumb
+                        src={p.image_url}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-lg"
+                        iconClass="fa-solid fa-toolbox text-sm"
+                      />
+                    )}
+                    <div>
+                      <div className="font-semibold text-slate-800">{p.name}</div>
+                      <div className="text-xs text-slate-400">
+                        {p.category ?? 'uncategorized'} {p.version ? `· v${p.version}` : ''}
+                      </div>
+                    </div>
                   </div>
                 </td>
                 <td className="px-5 py-3.5 font-bold text-slate-800">{taka(p.price)}</td>
@@ -268,6 +289,27 @@ export function AdminProducts(): JSX.Element {
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
+          </div>
+          <div>
+            <label className="label">
+              <i className="fa-solid fa-image mr-1" aria-hidden="true" />
+              Preview image URL
+            </label>
+            <input
+              className="input font-mono text-xs"
+              placeholder="https://your-site.com/previews/tool.png (or /previews/tool.png)"
+              value={form.image_url}
+              onChange={(e) => setForm({ ...form, image_url: e.target.value })}
+            />
+            {form.image_url && (
+              <div className="mt-2 flex items-center gap-3">
+                <Thumb src={form.image_url} alt="Preview" className="h-16 w-24 rounded-lg" iconClass="fa-solid fa-image text-lg" />
+                <span className="text-xs text-slate-400">Card preview — host it on your own subpage, paste the link.</span>
+              </div>
+            )}
+            <p className="mt-1 text-xs text-slate-400">
+              Optional. Empty = the default toolbox icon is used on the card.
+            </p>
           </div>
           <div>
             <label className="label">

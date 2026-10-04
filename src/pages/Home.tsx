@@ -4,7 +4,7 @@ import { backendConfigured } from '../lib/firebase'
 import { list, newest, where } from '../lib/db'
 import { taka } from '../lib/format'
 import type { Product } from '../lib/types'
-import { Badge } from '../components/ui'
+import { Badge, Thumb } from '../components/ui'
 
 const FEATURES = [
   {
@@ -202,11 +202,16 @@ export function Home(): JSX.Element {
             <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {products.map((p) => (
                 <Link key={p.id} to="/tools" className="card group p-6 transition hover:-translate-y-1">
+                  {p.image_url && (
+                    <Thumb src={p.image_url} alt={p.name} className="mb-4 aspect-[4/3] w-full rounded-xl" />
+                  )}
                   <div className="flex items-start justify-between">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-violet-600 text-xl text-white">
-                      <i className="fa-solid fa-toolbox" aria-hidden="true" />
-                    </div>
-                    {p.category && <Badge tone="brand">{p.category}</Badge>}
+                    {!p.image_url && (
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-violet-600 text-xl text-white">
+                        <i className="fa-solid fa-toolbox" aria-hidden="true" />
+                      </div>
+                    )}
+                    {p.category && <span className="ml-auto"><Badge tone="brand">{p.category}</Badge></span>}
                   </div>
                   <h3 className="mt-4 font-bold text-slate-900 group-hover:text-brand-600">{p.name}</h3>
                   <p className="mt-1 line-clamp-2 text-sm text-slate-500">{p.description}</p>

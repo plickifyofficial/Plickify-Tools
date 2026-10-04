@@ -21,6 +21,8 @@ export interface Product {
   price: number
   original_price: number | null
   version: string | null
+  /** Card preview image (absolute URL on your own hosting, or a /path). */
+  image_url: string | null
   is_active: boolean
   download_count: number
   created_at: string

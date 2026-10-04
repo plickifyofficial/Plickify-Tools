@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 
 export function Badge({
   children,
@@ -46,6 +46,40 @@ export function StatCard({
         {hint && <div className="truncate text-xs text-slate-400">{hint}</div>}
       </div>
     </div>
+  )
+}
+
+/** Product preview image with a branded fallback when the URL is missing/broken. */
+export function Thumb({
+  src,
+  alt,
+  className = '',
+  iconClass = 'fa-solid fa-toolbox text-3xl'
+}: {
+  src?: string | null
+  alt: string
+  className?: string
+  iconClass?: string
+}): JSX.Element {
+  const [failed, setFailed] = useState(false)
+  if (!src || failed) {
+    return (
+      <div
+        className={`flex items-center justify-center bg-gradient-to-br from-brand-600 to-violet-600 text-white ${className}`}
+        aria-hidden="true"
+      >
+        <i className={iconClass} />
+      </div>
+    )
+  }
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      className={`bg-slate-100 object-cover ${className}`}
+      onError={() => setFailed(true)}
+    />
   )
 }
 

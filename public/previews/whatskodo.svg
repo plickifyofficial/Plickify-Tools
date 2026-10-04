@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600" role="img" aria-label="WhatsKodo Pro Toolkit">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#84cc16"/>
+      <stop offset="1" stop-color="#16a34a"/>
+    </linearGradient>
+    <linearGradient id="chip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.30"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0.12"/>
+    </linearGradient>
+  </defs>
+  <rect width="800" height="600" fill="url(#bg)"/>
+  <circle cx="715" cy="75" r="170" fill="#ffffff" opacity="0.12"/>
+  <circle cx="70" cy="565" r="130" fill="#000000" opacity="0.12"/>
+  <rect x="48" y="48" width="118" height="50" rx="25" fill="#ffffff"/>
+  <text x="107" y="81" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="25" font-weight="800" fill="#16a34a">PRO</text>
+  <rect x="48" y="140" width="140" height="140" rx="34" fill="url(#chip)" stroke="#ffffff" stroke-opacity="0.35" stroke-width="2"/>
+  <text x="118" y="235" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="54" font-weight="800" fill="#ffffff">WA</text>
+  <text x="48" y="386" font-family="Segoe UI, Arial, sans-serif" font-size="54" font-weight="800" fill="#ffffff">WhatsKodo</text>
+  <text x="48" y="448" font-family="Segoe UI, Arial, sans-serif" font-size="54" font-weight="800" fill="#ffffff">Pro Toolkit</text>
+  <rect x="48" y="500" width="256" height="48" rx="24" fill="#ffffff"/>
+  <text x="176" y="531" text-anchor="middle" font-family="Segoe UI, Arial, sans-serif" font-size="21" font-weight="700" letter-spacing="1.5" fill="#16a34a">LIFETIME LICENSE</text>
+</svg>

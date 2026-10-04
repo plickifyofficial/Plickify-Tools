@@ -4,7 +4,7 @@ import { backendConfigured } from '../lib/firebase'
 import { insert, list, newest, nowIso, where } from '../lib/db'
 import { taka } from '../lib/format'
 import type { PaymentMethod, Product } from '../lib/types'
-import { Badge, Modal, PageTitle, Spinner } from '../components/ui'
+import { Badge, Modal, PageTitle, Spinner, Thumb } from '../components/ui'
 import { useSession } from '../hooks/useSession'
 
 export function Tools(): JSX.Element {
@@ -58,11 +58,16 @@ export function Tools(): JSX.Element {
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((p) => (
             <div key={p.id} className="card flex flex-col p-6">
+              {p.image_url && (
+                <Thumb src={p.image_url} alt={p.name} className="mb-4 aspect-[4/3] w-full rounded-xl" />
+              )}
               <div className="flex items-start justify-between">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-violet-600 text-xl text-white">
-                  <i className="fa-solid fa-toolbox" aria-hidden="true" />
-                </div>
-                <div className="flex gap-2">
+                {!p.image_url && (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-brand-600 to-violet-600 text-xl text-white">
+                    <i className="fa-solid fa-toolbox" aria-hidden="true" />
+                  </div>
+                )}
+                <div className="ml-auto flex gap-2">
                   {p.category && <Badge tone="brand">{p.category}</Badge>}
                   {p.version && <Badge>v{p.version}</Badge>}
                 </div>
