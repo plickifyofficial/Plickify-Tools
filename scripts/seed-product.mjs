@@ -7,6 +7,8 @@
  *   node scripts/seed-product.mjs                     # upsert PRODUCT below
  *   node scripts/seed-product.mjs --url https://...   # also set download URL
  *   node scripts/seed-product.mjs --price 799         # override price
+ *   node scripts/seed-product.mjs --set bkash_number=01700000000 \
+ *        --set nagad_number=01800000000               # site_settings (repeatable)
  *   node scripts/seed-product.mjs --key ../other.json # other service account
  *   node scripts/seed-product.mjs --dry-run           # print, don't write
  *
@@ -51,6 +53,23 @@ if (price !== undefined && !Number.isFinite(price)) {
   process.exit(1)
 }
 
+// --set key=value (repeatable) → site_settings/{key} = { key, value }
+function allArgs(name) {
+  const out = []
+  for (let i = 0; i < process.argv.length - 1; i++) {
+    if (process.argv[i] === `--${name}`) out.push(process.argv[i + 1])
+  }
+  return out
+}
+const settings = allArgs('set').map((pair) => {
+  const i = pair.indexOf('=')
+  if (i < 1) {
+    console.error(`--set expects key=value, got "${pair}"`)
+    process.exit(1)
+  }
+  return { key: pair.slice(0, i), value: pair.slice(i + 1) }
+})
+
 // ─── Credentials ────────────────────────────────────────────────────────────
 const here = dirname(fileURLToPath(import.meta.url))
 const keyPath = arg('key') ?? resolve(here, '..', '.service-account.json')
@@ -81,6 +100,7 @@ if (price !== undefined) product.price = price
 if (dryRun) {
   console.log(`[dry-run] would upsert products/${docId}:\n`, product)
   if (fileUrl) console.log('[dry-run] would set download url:', fileUrl)
+  for (const s of settings) console.log(`[dry-run] would set site_settings/${s.key} = ${s.value}`)
   process.exit(0)
 }
 
@@ -108,6 +128,11 @@ try {
       updated_at: new Date().toISOString()
     })
     console.log(`set product_files/${docId} -> ${fileUrl}`)
+  }
+
+  for (const s of settings) {
+    await db.collection('site_settings').doc(s.key).set({ key: s.key, value: s.value })
+    console.log(`set site_settings/${s.key} = ${s.value}`)
   }
 
   const finalSnap = await ref.get()
