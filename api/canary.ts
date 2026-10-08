@@ -1,5 +1,5 @@
-// TEMPORARY diagnostic function — zero imports. Reports runtime health only.
-// Delete after the FUNCTION_INVOCATION_FAILED issue is diagnosed.
+// Health check: GET /api/canary → 200 { ok, node, env, method }.
+// Zero imports/dependencies — proves the function runtime + env are healthy.
 export default function handler(
   req: { method?: string },
   res: {
