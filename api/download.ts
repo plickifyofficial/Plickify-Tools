@@ -7,8 +7,8 @@
 // the Firestore data they can read. GitHub release assets are resolved to a
 // short-lived signed URL when GITHUB_TOKEN is set (private repos).
 
-import { adminAuth, adminDb } from './_lib/admin'
-import { bearerToken, fail, guardMethod, json, queryString, type ApiReq, type ApiRes } from './_lib/http'
+import { adminAuth, adminDb } from './_lib/admin.js'
+import { bearerToken, fail, guardMethod, json, queryString, type ApiReq, type ApiRes } from './_lib/http.js'
 import { FieldValue } from 'firebase-admin/firestore'
 
 interface GitHubRelease {

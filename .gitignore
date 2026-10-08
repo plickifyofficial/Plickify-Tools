@@ -11,6 +11,9 @@ dist-ssr/
 .env.*.local
 .service-account.json
 
+# Vercel CLI link (created by `vercel link` for logs/env commands)
+.vercel/
+
 # Editor / OS
 .vscode/
 .idea/
@@ -26,3 +29,5 @@ dist-ssr/
 npm-debug.log*
 
 *.tsbuildinfo
+.vercel
+.env*

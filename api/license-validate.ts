@@ -4,9 +4,9 @@
 // Called by the app at least once per 24h while it runs. Network failures on
 // the app side are NOT rejections — the offline grace window covers them.
 
-import { adminDb } from './_lib/admin'
-import { fail, guardMethod, json, parseBody, type ApiReq, type ApiRes } from './_lib/http'
-import { deviceIdFor, GRACE_DAYS, verifyToken } from './_lib/license'
+import { adminDb } from './_lib/admin.js'
+import { fail, guardMethod, json, parseBody, type ApiReq, type ApiRes } from './_lib/http.js'
+import { deviceIdFor, GRACE_DAYS, verifyToken } from './_lib/license.js'
 
 export default async function handler(req: ApiReq, res: ApiRes): Promise<void> {
   if (guardMethod(req, res, 'POST')) return

@@ -4,8 +4,8 @@
 // Vercel rewrite maps the app's old Supabase-style URL onto this function, so
 // the desktop app needs no changes.
 
-import { adminDb } from './_lib/admin'
-import { fail, guardMethod, json, parseBody, type ApiReq, type ApiRes } from './_lib/http'
+import { adminDb } from './_lib/admin.js'
+import { fail, guardMethod, json, parseBody, type ApiReq, type ApiRes } from './_lib/http.js'
 import {
   deviceIdFor,
   DEVICE_PATTERN,
@@ -13,7 +13,7 @@ import {
   KEY_PATTERN,
   signToken,
   TOKEN_TTL_SECONDS
-} from './_lib/license'
+} from './_lib/license.js'
 
 export default async function handler(req: ApiReq, res: ApiRes): Promise<void> {
   if (guardMethod(req, res, 'POST')) return

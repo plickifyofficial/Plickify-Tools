@@ -3,9 +3,9 @@
 //
 // Frees this device's seat so the license can be activated on another PC.
 
-import { adminDb } from './_lib/admin'
-import { fail, guardMethod, json, parseBody, type ApiReq, type ApiRes } from './_lib/http'
-import { deviceIdFor, verifyToken } from './_lib/license'
+import { adminDb } from './_lib/admin.js'
+import { fail, guardMethod, json, parseBody, type ApiReq, type ApiRes } from './_lib/http.js'
+import { deviceIdFor, verifyToken } from './_lib/license.js'
 
 export default async function handler(req: ApiReq, res: ApiRes): Promise<void> {
   if (guardMethod(req, res, 'POST')) return

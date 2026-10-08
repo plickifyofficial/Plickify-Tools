@@ -3,7 +3,7 @@
 export default function handler(
   req: { method?: string },
   res: {
-    status(code: number): unknown
+    status(code: number): { json(body: unknown): unknown }
     json(body: unknown): unknown
   }
 ): void {
