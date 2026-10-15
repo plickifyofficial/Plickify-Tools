@@ -5,6 +5,7 @@ import { list, newest, where } from '../lib/db'
 import { taka } from '../lib/format'
 import type { Product } from '../lib/types'
 import { Badge, Thumb } from '../components/ui'
+import { useSession } from '../hooks/useSession'
 
 const FEATURES = [
   {
@@ -58,6 +59,8 @@ const FAQ = [
 export function Home(): JSX.Element {
   const [products, setProducts] = useState<Product[]>([])
 
+  const { session } = useSession()
+
   useEffect(() => {
     if (!backendConfigured) return
     void list<Product>('products', where('is_active', '==', true))
@@ -87,10 +90,17 @@ export function Home(): JSX.Element {
                 <i className="fa-solid fa-store" aria-hidden="true" />
                 Browse Tools
               </Link>
-              <Link to="/login" className="btn border border-white/40 text-white hover:bg-white/10">
-                <i className="fa-brands fa-google" aria-hidden="true" />
-                Login with Google
-              </Link>
+              {session ? (
+                <Link to="/dashboard" className="btn border border-white/40 text-white hover:bg-white/10">
+                  <i className="fa-solid fa-gauge" aria-hidden="true" />
+                  Open Dashboard
+                </Link>
+              ) : (
+                <Link to="/login" className="btn border border-white/40 text-white hover:bg-white/10">
+                  <i className="fa-brands fa-google" aria-hidden="true" />
+                  Login with Google
+                </Link>
+              )}
             </div>
             <div className="mt-10 grid max-w-md grid-cols-3 gap-4 text-center">
               <div>
@@ -296,10 +306,17 @@ export function Home(): JSX.Element {
               <i className="fa-solid fa-store" aria-hidden="true" />
               Browse Tools
             </Link>
-            <Link to="/login" className="btn border border-white/40 hover:bg-white/10">
-              <i className="fa-solid fa-right-to-bracket" aria-hidden="true" />
-              Login
-            </Link>
+            {session ? (
+              <Link to="/dashboard" className="btn border border-white/40 hover:bg-white/10">
+                <i className="fa-solid fa-gauge" aria-hidden="true" />
+                Dashboard
+              </Link>
+            ) : (
+              <Link to="/login" className="btn border border-white/40 hover:bg-white/10">
+                <i className="fa-solid fa-right-to-bracket" aria-hidden="true" />
+                Login
+              </Link>
+            )}
           </div>
         </div>
       </section>

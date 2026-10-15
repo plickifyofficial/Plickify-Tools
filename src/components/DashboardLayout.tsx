@@ -39,9 +39,7 @@ export function DashboardLayout({ variant }: { variant: 'user' | 'admin' }): JSX
     <div className="flex min-h-screen bg-slate-50">
       <aside className="fixed inset-y-0 z-30 flex w-64 flex-col bg-slate-900 p-4">
         <Link to="/" className="mb-6 flex items-center gap-2.5 px-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-violet-600 font-extrabold text-white">
-            P
-          </span>
+          <img src="/logo.png" alt="" className="h-9 w-9 rounded-xl object-cover" />
           <div>
             <div className="text-sm font-extrabold text-white">Plickify Tools</div>
             <div className="text-[11px] uppercase tracking-widest text-slate-400">

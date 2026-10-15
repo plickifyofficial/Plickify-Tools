@@ -7,6 +7,8 @@ import { RequireAdmin, RequireAuth } from './components/guards'
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
 import { Tools } from './pages/Tools'
+import { About } from './pages/About'
+import { Contact } from './pages/Contact'
 import { DashboardOverview } from './pages/dashboard/Overview'
 import { MyLicense } from './pages/dashboard/MyLicense'
 import { Purchases } from './pages/dashboard/Purchases'
@@ -44,6 +46,30 @@ export default function App(): JSX.Element {
                 <Navbar />
                 <main className="flex-1">
                   <Tools />
+                </main>
+                <Footer />
+              </div>
+            }
+          />
+          <Route
+            path="/about"
+            element={
+              <div className="flex min-h-screen flex-col">
+                <Navbar />
+                <main className="flex-1">
+                  <About />
+                </main>
+                <Footer />
+              </div>
+            }
+          />
+          <Route
+            path="/contact"
+            element={
+              <div className="flex min-h-screen flex-col">
+                <Navbar />
+                <main className="flex-1">
+                  <Contact />
                 </main>
                 <Footer />
               </div>

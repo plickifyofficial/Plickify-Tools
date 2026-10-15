@@ -1,14 +1,14 @@
 import { Link } from 'react-router-dom'
+import { useSession } from '../hooks/useSession'
 
 export function Footer(): JSX.Element {
+  const { session } = useSession()
   return (
     <footer className="border-t border-slate-200 bg-white">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-3">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-violet-600 font-extrabold text-white">
-              P
-            </span>
+            <img src="/logo.png" alt="" className="h-9 w-9 rounded-xl object-cover" />
             <span className="text-lg font-extrabold text-slate-900">Plickify Tools</span>
           </div>
           <p className="mt-3 max-w-xs text-sm text-slate-500">
@@ -40,17 +40,32 @@ export function Footer(): JSX.Element {
               </Link>
             </li>
             <li>
-              <Link className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-600" to="/dashboard">
-                <i className="fa-solid fa-gauge w-3.5 text-xs text-slate-400" aria-hidden="true" />
-                Dashboard
+              <Link className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-600" to="/about">
+                <i className="fa-solid fa-circle-info w-3.5 text-xs text-slate-400" aria-hidden="true" />
+                About
               </Link>
             </li>
             <li>
-              <Link className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-600" to="/login">
-                <i className="fa-solid fa-right-to-bracket w-3.5 text-xs text-slate-400" aria-hidden="true" />
-                Login
+              <Link className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-600" to="/contact">
+                <i className="fa-solid fa-envelope w-3.5 text-xs text-slate-400" aria-hidden="true" />
+                Contact
               </Link>
             </li>
+            {session ? (
+              <li>
+                <Link className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-600" to="/dashboard">
+                  <i className="fa-solid fa-gauge w-3.5 text-xs text-slate-400" aria-hidden="true" />
+                  Dashboard
+                </Link>
+              </li>
+            ) : (
+              <li>
+                <Link className="inline-flex items-center gap-2 text-slate-600 hover:text-brand-600" to="/login">
+                  <i className="fa-solid fa-right-to-bracket w-3.5 text-xs text-slate-400" aria-hidden="true" />
+                  Login
+                </Link>
+              </li>
+            )}
           </ul>
         </div>
 

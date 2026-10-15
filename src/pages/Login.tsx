@@ -24,9 +24,7 @@ export function Login(): JSX.Element {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-700 via-brand-600 to-violet-600 px-4">
       <div className="w-full max-w-md">
         <Link to="/" className="mb-6 flex items-center justify-center gap-2.5 text-white">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15 text-xl font-extrabold">
-            P
-          </span>
+          <img src="/logo.png" alt="" className="h-10 w-10 rounded-xl object-cover ring-2 ring-white/40" />
           <span className="text-xl font-extrabold">Plickify Tools</span>
         </Link>
 
