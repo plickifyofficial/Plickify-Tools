@@ -12,13 +12,16 @@ const USER_NAV: NavItem[] = [
   { to: '/dashboard', label: 'Overview', icon: 'fa-house', end: true },
   { to: '/dashboard/license', label: 'My License', icon: 'fa-key' },
   { to: '/dashboard/purchases', label: 'My Tools', icon: 'fa-box-open' },
-  { to: '/dashboard/orders', label: 'Orders', icon: 'fa-receipt' }
+  { to: '/dashboard/orders', label: 'Orders', icon: 'fa-receipt' },
+  { to: '/dashboard/redeem', label: 'Redeem Code', icon: 'fa-ticket' }
 ]
 
 const ADMIN_NAV: NavItem[] = [
   { to: '/admin', label: 'Overview', icon: 'fa-chart-pie', end: true },
   { to: '/admin/orders', label: 'Orders', icon: 'fa-list-check' },
   { to: '/admin/products', label: 'Products', icon: 'fa-boxes-stacked' },
+  { to: '/admin/coupons', label: 'Coupons', icon: 'fa-ticket' },
+  { to: '/admin/redeem-codes', label: 'Redeem Codes', icon: 'fa-gift' },
   { to: '/admin/licenses', label: 'Licenses', icon: 'fa-key' },
   { to: '/admin/users', label: 'Users', icon: 'fa-users' },
   { to: '/admin/settings', label: 'Site Settings', icon: 'fa-gear' }

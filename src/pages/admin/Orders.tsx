@@ -111,10 +111,24 @@ export function AdminOrders(): JSX.Element {
                   </td>
                   <td className="px-5 py-3.5 font-semibold text-slate-800">{o.product?.name ?? o.product_name ?? 'Tool'}</td>
                   <td className="px-5 py-3.5">
-                    <div className="capitalize text-slate-600">{o.method}</div>
-                    <div className="font-mono text-xs text-slate-500">{o.trx_id}</div>
+                    <div
+                      className={`capitalize ${
+                        o.method === 'free' ? 'font-bold text-emerald-600' : 'text-slate-600'
+                      }`}
+                    >
+                      {o.method === 'free' ? 'Free' : o.method}
+                    </div>
+                    <div className="font-mono text-xs text-slate-500">{o.trx_id || '—'}</div>
                   </td>
-                  <td className="px-5 py-3.5 font-bold text-slate-800">{taka(Number(o.amount))}</td>
+                  <td className="px-5 py-3.5">
+                    <div className="font-bold text-slate-800">{taka(Number(o.amount))}</div>
+                    {Boolean(o.coupon_code) && (
+                      <div className="text-[11px] font-semibold text-emerald-600">
+                        <i className="fa-solid fa-ticket" aria-hidden="true" /> {o.coupon_code}
+                        {typeof o.discount === 'number' && o.discount > 0 ? ` −${taka(o.discount)}` : ''}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5 text-slate-500">{formatDate(o.created_at)}</td>
                   <td className="px-5 py-3.5">
                     <Badge tone={STATUS_TONE[o.status]}>{o.status}</Badge>

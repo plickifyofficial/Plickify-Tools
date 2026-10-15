@@ -101,6 +101,21 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // ---------------- coupons (discount codes) ----------------
+    // Admin CRUD only — checkout validation happens server-side through
+    // /api/coupon-validate (the Admin SDK bypasses these rules, so buyers
+    // can never read or tamper with the codes).
+    match /coupons/{code} {
+      allow read, write: if isAdmin();
+    }
+
+    // ---------------- redeem codes (free licenses) ----------------
+    // Redemption runs through /api/redeem (Admin SDK); clients only touch
+    // this collection from the admin panel.
+    match /redeem_codes/{code} {
+      allow read, write: if isAdmin();
+    }
+
     // ---------------- site settings ----------------
     match /site_settings/{key} {
       allow read: if true;

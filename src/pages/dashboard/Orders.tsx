@@ -55,9 +55,22 @@ export function Orders(): JSX.Element {
                 <tr key={o.id} className="hover:bg-slate-50/60">
                   <td className="px-5 py-3.5 font-semibold text-slate-800">{o.product_name ?? 'Tool'}</td>
                   <td className="px-5 py-3.5 text-slate-500">{formatDate(o.created_at)}</td>
-                  <td className="px-5 py-3.5 capitalize text-slate-500">{o.method}</td>
-                  <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{o.trx_id}</td>
-                  <td className="px-5 py-3.5 font-bold text-slate-800">{taka(Number(o.amount))}</td>
+                  <td
+                    className={`px-5 py-3.5 capitalize ${
+                      o.method === 'free' ? 'font-semibold text-emerald-600' : 'text-slate-500'
+                    }`}
+                  >
+                    {o.method === 'free' ? 'Free' : o.method}
+                  </td>
+                  <td className="px-5 py-3.5 font-mono text-xs text-slate-500">{o.trx_id || '—'}</td>
+                  <td className="px-5 py-3.5">
+                    <div className="font-bold text-slate-800">{taka(Number(o.amount))}</div>
+                    {Boolean(o.coupon_code) && (
+                      <div className="text-[11px] font-semibold text-emerald-600">
+                        <i className="fa-solid fa-ticket" aria-hidden="true" /> {o.coupon_code}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5">
                     <div className="flex items-center gap-2">
                       <Badge tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Badge>

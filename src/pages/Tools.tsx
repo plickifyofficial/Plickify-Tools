@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { backendConfigured } from '../lib/firebase'
-import { insert, list, newest, nowIso, where } from '../lib/db'
+import { list, newest, where } from '../lib/db'
 import { taka } from '../lib/format'
 import type { PaymentMethod, Product } from '../lib/types'
 import { Badge, Modal, PageTitle, Spinner, Thumb } from '../components/ui'
 import { useSession } from '../hooks/useSession'
+
+interface CouponOk {
+  code: string
+  discount: number
+  total: number
+}
 
 export function Tools(): JSX.Element {
   const { session } = useSession()
@@ -79,7 +85,11 @@ export function Tools(): JSX.Element {
                   {p.original_price && (
                     <span className="mr-2 text-xs text-slate-400 line-through">{taka(p.original_price)}</span>
                   )}
-                  <span className="text-xl font-extrabold text-slate-900">{taka(p.price)}</span>
+                  {p.price > 0 ? (
+                    <span className="text-xl font-extrabold text-slate-900">{taka(p.price)}</span>
+                  ) : (
+                    <span className="text-xl font-extrabold text-emerald-600">Free</span>
+                  )}
                 </div>
                 <button
                   className="btn-primary"
@@ -91,8 +101,8 @@ export function Tools(): JSX.Element {
                     setBuying(p)
                   }}
                 >
-                  <i className="fa-solid fa-cart-plus" aria-hidden="true" />
-                  Buy Now
+                  <i className={p.price > 0 ? 'fa-solid fa-cart-plus' : 'fa-solid fa-gift'} aria-hidden="true" />
+                  {p.price > 0 ? 'Buy Now' : 'Get Free'}
                 </button>
               </div>
             </div>
@@ -124,39 +134,94 @@ function BuyModal({
   onClose: () => void
   onOrdered: () => void
 }): JSX.Element | null {
-  const { session } = useSession()
+  const { session, getIdToken } = useSession()
   const [method, setMethod] = useState<PaymentMethod>('bkash')
   const [trxId, setTrxId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [couponInput, setCouponInput] = useState('')
+  const [coupon, setCoupon] = useState<CouponOk | null>(null)
+  const [couponBusy, setCouponBusy] = useState(false)
+  const [couponError, setCouponError] = useState<string | null>(null)
+
+  const productId = product?.id ?? null
+  useEffect(() => {
+    // Fresh state every time a different product's modal opens.
+    setTrxId('')
+    setError(null)
+    setCoupon(null)
+    setCouponInput('')
+    setCouponError(null)
+  }, [productId])
 
   if (!product) return null
 
   const number = method === 'bkash' ? settings['bkash_number'] : settings['nagad_number']
+  const total = coupon ? coupon.total : Math.max(0, product.price)
+  const isFree = total <= 0
+
+  async function applyCoupon(): Promise<void> {
+    if (!session || !product) return
+    const value = couponInput.trim()
+    if (!value) {
+      setCouponError('Enter a coupon code.')
+      return
+    }
+    setCouponBusy(true)
+    setCouponError(null)
+    try {
+      const token = await getIdToken()
+      if (!token) throw new Error('Session expired — logout and login again.')
+      const res = await fetch('/api/coupon-validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code: value, productId: product.id })
+      })
+      const data = (await res.json()) as Partial<CouponOk> & { ok?: boolean; error?: string }
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Invalid coupon.')
+      setCoupon({ code: data.code as string, discount: data.discount as number, total: data.total as number })
+      setCouponError(null)
+    } catch (err) {
+      setCoupon(null)
+      setCouponError(err instanceof Error ? err.message : 'Could not check the coupon.')
+    }
+    setCouponBusy(false)
+  }
+
+  function removeCoupon(): void {
+    setCoupon(null)
+    setCouponInput('')
+    setCouponError(null)
+  }
 
   async function submit(): Promise<void> {
     if (!session || !product) return
-    if (trxId.trim().length < 6) {
-      setError('Enter the TrxID from your payment confirmation SMS.')
-      return
-    }
-    if (!/^[A-Za-z0-9-]{6,64}$/.test(trxId.trim())) {
-      setError('TrxID should be 6–64 letters/digits/dashes only (e.g. 9F7A2K1XYZ).')
-      return
+    if (!isFree) {
+      if (trxId.trim().length < 6) {
+        setError('Enter the TrxID from your payment confirmation SMS.')
+        return
+      }
+      if (!/^[A-Za-z0-9-]{6,64}$/.test(trxId.trim())) {
+        setError('TrxID should be 6–64 letters/digits/dashes only (e.g. 9F7A2K1XYZ).')
+        return
+      }
     }
     setBusy(true)
     setError(null)
     try {
-      await insert('orders', {
-        user_id: session.user.id,
-        product_id: product.id,
-        product_name: product.name,
-        amount: product.price,
-        method,
-        trx_id: trxId.trim(),
-        status: 'pending',
-        created_at: nowIso()
+      const token = await getIdToken()
+      if (!token) throw new Error('Session expired — logout and login again.')
+      const res = await fetch('/api/orders-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          productId: product.id,
+          ...(isFree ? {} : { method, trxId: trxId.trim() }),
+          ...(coupon ? { couponCode: coupon.code } : {})
+        })
       })
+      const data = (await res.json()) as { ok?: boolean; error?: string }
+      if (!res.ok || !data.ok) throw new Error(data.error || 'Could not submit the order.')
     } catch (err) {
       setBusy(false)
       setError(err instanceof Error ? err.message : 'Could not submit the order.')
@@ -175,73 +240,143 @@ function BuyModal({
             <i className="fa-solid fa-tags text-brand-500" aria-hidden="true" />
             Price
           </span>
-          <span className="text-lg font-extrabold text-slate-900">{taka(product.price)}</span>
+          <span>
+            {coupon && (
+              <span className="mr-2 text-sm text-slate-400 line-through">{taka(product.price)}</span>
+            )}
+            <span className={`text-lg font-extrabold ${isFree ? 'text-emerald-600' : 'text-slate-900'}`}>
+              {isFree ? 'Free' : taka(total)}
+            </span>
+          </span>
         </div>
+        {coupon && (
+          <div className="mt-1 text-right text-xs font-semibold text-emerald-600">
+            <i className="fa-solid fa-ticket mr-1" aria-hidden="true" />
+            {coupon.code} — {taka(coupon.discount)} off
+          </div>
+        )}
       </div>
 
-      <div className="mt-5">
+      {/* Coupon */}
+      <div className="mt-4 rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-3">
         <span className="label">
-          <i className="fa-solid fa-wallet mr-1" aria-hidden="true" />
-          Pay with
+          <i className="fa-solid fa-ticket mr-1" aria-hidden="true" />
+          Have a coupon?
         </span>
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            className={`rounded-xl border px-4 py-3 text-sm font-bold ${
-              method === 'bkash'
-                ? 'border-pink-500 bg-pink-50 text-pink-700'
-                : 'border-slate-200 text-slate-600'
-            }`}
-            onClick={() => setMethod('bkash')}
-          >
-            <i className="fa-solid fa-mobile-screen-button mr-1.5" aria-hidden="true" />
-            bKash
-          </button>
-          <button
-            className={`rounded-xl border px-4 py-3 text-sm font-bold ${
-              method === 'nagad'
-                ? 'border-orange-500 bg-orange-50 text-orange-700'
-                : 'border-slate-200 text-slate-600'
-            }`}
-            onClick={() => setMethod('nagad')}
-          >
-            <i className="fa-solid fa-mobile-screen-button mr-1.5" aria-hidden="true" />
-            Nagad
-          </button>
-        </div>
+        {coupon ? (
+          <div className="flex items-center justify-between text-sm">
+            <span className="font-bold text-emerald-600">
+              <i className="fa-solid fa-circle-check mr-1.5" aria-hidden="true" />
+              {coupon.code} applied
+            </span>
+            <button className="text-xs font-semibold text-slate-500 hover:text-red-600" onClick={removeCoupon}>
+              Remove
+            </button>
+          </div>
+        ) : (
+          <div className="flex gap-2">
+            <input
+              className="input font-mono uppercase"
+              placeholder="e.g. SAVE50"
+              value={couponInput}
+              onChange={(e) => setCouponInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void applyCoupon()
+              }}
+            />
+            <button className="btn-secondary whitespace-nowrap" onClick={() => void applyCoupon()} disabled={couponBusy}>
+              <i className={couponBusy ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-check'} aria-hidden="true" />
+              {couponBusy ? 'Checking…' : 'Apply'}
+            </button>
+          </div>
+        )}
+        {couponError && (
+          <p className="mt-2 text-xs text-red-600" role="alert">
+            <i className="fa-solid fa-triangle-exclamation mr-1" aria-hidden="true" />
+            {couponError}
+          </p>
+        )}
       </div>
 
-      <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4 text-sm">
-        <div className="flex justify-between py-1">
-          <span className="text-slate-500">Send Money to</span>
-          <span className="font-bold text-slate-900">{number || '— (number not configured)'}</span>
+      {isFree ? (
+        // Free: no payment method, no TrxID — unlock instantly.
+        <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          <div className="font-bold">
+            <i className="fa-solid fa-gift mr-1.5" aria-hidden="true" />
+            {coupon ? 'Coupon covers the full price — this order is FREE' : 'This tool is FREE'}
+          </div>
+          <p className="mt-1">
+            Payment lagbe na — “Get Free” click korlei order approved hoye jabe, tarpor My Tools theke download
+            kore nen.
+          </p>
         </div>
-        <div className="flex justify-between py-1">
-          <span className="text-slate-500">Amount</span>
-          <span className="font-bold text-slate-900">{taka(product.price)}</span>
-        </div>
-        <div className="flex justify-between py-1">
-          <span className="text-slate-500">Reference</span>
-          <span className="font-bold text-slate-900">Your email</span>
-        </div>
-        <p className="mt-2 text-xs text-slate-400">
-          <i className="fa-solid fa-circle-info mr-1" aria-hidden="true" />
-          Use “Send Money” (not Payment). Approval usually takes 5–30 minutes.
-        </p>
-      </div>
+      ) : (
+        <>
+          <div className="mt-5">
+            <span className="label">
+              <i className="fa-solid fa-wallet mr-1" aria-hidden="true" />
+              Pay with
+            </span>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                  method === 'bkash'
+                    ? 'border-pink-500 bg-pink-50 text-pink-700'
+                    : 'border-slate-200 text-slate-600'
+                }`}
+                onClick={() => setMethod('bkash')}
+              >
+                <i className="fa-solid fa-mobile-screen-button mr-1.5" aria-hidden="true" />
+                bKash
+              </button>
+              <button
+                className={`rounded-xl border px-4 py-3 text-sm font-bold ${
+                  method === 'nagad'
+                    ? 'border-orange-500 bg-orange-50 text-orange-700'
+                    : 'border-slate-200 text-slate-600'
+                }`}
+                onClick={() => setMethod('nagad')}
+              >
+                <i className="fa-solid fa-mobile-screen-button mr-1.5" aria-hidden="true" />
+                Nagad
+              </button>
+            </div>
+          </div>
 
-      <div className="mt-4">
-        <label className="label" htmlFor="trx-id">
-          <i className="fa-solid fa-receipt mr-1" aria-hidden="true" />
-          TrxID
-        </label>
-        <input
-          id="trx-id"
-          className="input font-mono"
-          placeholder="e.g. 9F7A2K1XYZ"
-          value={trxId}
-          onChange={(e) => setTrxId(e.target.value)}
-        />
-      </div>
+          <div className="mt-4 rounded-xl border border-dashed border-slate-300 p-4 text-sm">
+            <div className="flex justify-between py-1">
+              <span className="text-slate-500">Send Money to</span>
+              <span className="font-bold text-slate-900">{number || '— (number not configured)'}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-slate-500">Amount</span>
+              <span className="font-bold text-slate-900">{taka(total)}</span>
+            </div>
+            <div className="flex justify-between py-1">
+              <span className="text-slate-500">Reference</span>
+              <span className="font-bold text-slate-900">Your email</span>
+            </div>
+            <p className="mt-2 text-xs text-slate-400">
+              <i className="fa-solid fa-circle-info mr-1" aria-hidden="true" />
+              Use “Send Money” (not Payment). Approval usually takes 5–30 minutes.
+            </p>
+          </div>
+
+          <div className="mt-4">
+            <label className="label" htmlFor="trx-id">
+              <i className="fa-solid fa-receipt mr-1" aria-hidden="true" />
+              TrxID
+            </label>
+            <input
+              id="trx-id"
+              className="input font-mono"
+              placeholder="e.g. 9F7A2K1XYZ"
+              value={trxId}
+              onChange={(e) => setTrxId(e.target.value)}
+            />
+          </div>
+        </>
+      )}
 
       {error && (
         <div className="mt-3 rounded-xl bg-red-50 px-3 py-2.5 text-sm text-red-600" role="alert">
@@ -255,8 +390,17 @@ function BuyModal({
           Cancel
         </button>
         <button className="btn-primary" onClick={() => void submit()} disabled={busy}>
-          <i className={busy ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-circle-check'} aria-hidden="true" />
-          {busy ? 'Submitting…' : 'I have paid — Submit'}
+          <i
+            className={
+              busy
+                ? 'fa-solid fa-spinner fa-spin'
+                : isFree
+                  ? 'fa-solid fa-gift'
+                  : 'fa-solid fa-circle-check'
+            }
+            aria-hidden="true"
+          />
+          {busy ? (isFree ? 'Unlocking…' : 'Submitting…') : isFree ? 'Get Free' : 'I have paid — Submit'}
         </button>
       </div>
     </Modal>

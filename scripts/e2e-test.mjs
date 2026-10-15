@@ -5,7 +5,10 @@
  *
  * Covers: profile lookup → gated download (purchased vs not) → admin
  * promote → license activate → validate → negative device check →
- * deactivate. Uses the real live endpoints at tools.plickifyacademy.com.
+ * deactivate → coupon validation → discounted order → 100% coupon free
+ * order (auto-approved) → redeem code → license issuance. Uses the real
+ * live endpoints at tools.plickifyacademy.com (promo test data is seeded
+ * and cleaned up within the run).
  * Pass --promote to grant admin (default: yes unless --no-promote).
  */
 import { readFileSync } from 'node:fs'
@@ -134,6 +137,144 @@ if (act.token) {
 
   const deact = await j(await post('license-deactivate', { token: act.token, deviceId: TEST_DEVICE }))
   check('deactivate → ok:true (seat freed)', deact.ok === true, JSON.stringify(deact))
+}
+
+// ── 6. Coupons + free order + redeem ───────────────────────────────────────
+console.log('\n[6] Coupon + free order + redeem')
+const postAuth = (fn, body, token) =>
+  fetch(`${SITE}/functions/v1/${fn}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body)
+  })
+
+const prodSnap = await db.collection('products').doc(PRODUCT).get()
+const price = Math.max(0, Number(prodSnap.data()?.price) || 0)
+check('product price > 0', price > 0, `৳${price}`)
+
+const badCoupon = await j(await postAuth('coupon-validate', { code: 'NO-SUCH-CODE', productId: PRODUCT }, idToken))
+check('unknown coupon → 400 invalid_coupon', badCoupon.code === 'invalid_coupon', badCoupon.code)
+
+// Seed two test coupons (admin SDK — everything is deleted again below).
+const HALF = 'E2E-HALF50'
+const FULL = 'E2E-FULL100'
+const seedCoupon = (id, value) =>
+  db.collection('coupons').doc(id).set({
+    code: id,
+    type: 'percent',
+    value,
+    max_uses: 0,
+    used_count: 0,
+    expires_at: null,
+    active: true,
+    created_at: new Date().toISOString()
+  })
+await seedCoupon(HALF, 50)
+await seedCoupon(FULL, 100)
+
+const valid = await j(await postAuth('coupon-validate', { code: HALF, productId: PRODUCT }, idToken))
+const expDiscount = Math.round(price * 0.5)
+check(
+  '50% coupon → correct discount + total',
+  valid.ok === true && valid.discount === expDiscount && valid.total === price - expDiscount,
+  JSON.stringify(valid)
+)
+
+const halfOrder = await j(
+  await postAuth('orders-create', { productId: PRODUCT, couponCode: HALF, method: 'bkash', trxId: 'E2ETESTX1' }, idToken)
+)
+check(
+  'discounted order → pending @ discounted amount',
+  halfOrder.ok === true && halfOrder.status === 'pending' && halfOrder.amount === price - expDiscount,
+  `৳${halfOrder.amount} (${halfOrder.status})`
+)
+const halfDoc = halfOrder.orderId ? await db.collection('orders').doc(halfOrder.orderId).get() : null
+const halfCouponDoc = await db.collection('coupons').doc(HALF).get()
+check(
+  'order carries coupon_code + used_count=1',
+  Boolean(halfDoc?.exists) &&
+    halfDoc.data().coupon_code === HALF &&
+    halfCouponDoc.data()?.used_count === 1,
+  `coupon=${halfDoc?.exists ? halfDoc.data().coupon_code : '?'} used=${halfCouponDoc.data()?.used_count}`
+)
+
+const noMethod = await j(await postAuth('orders-create', { productId: PRODUCT }, idToken))
+check('paid order without method/trx → 400 invalid_method', noMethod.code === 'invalid_method', noMethod.code)
+
+// 100% coupon → total 0 → payment skipped entirely, order auto-approved.
+const freeOrder = await j(await postAuth('orders-create', { productId: PRODUCT, couponCode: FULL }, idToken))
+check(
+  '100% coupon → approved ৳0 order (no payment)',
+  freeOrder.ok === true && freeOrder.status === 'approved' && freeOrder.amount === 0,
+  JSON.stringify(freeOrder)
+)
+const freeDoc = freeOrder.orderId ? await db.collection('orders').doc(freeOrder.orderId).get() : null
+check(
+  'free order method=free, status=approved',
+  Boolean(freeDoc?.exists) && freeDoc.data().method === 'free' && freeDoc.data().status === 'approved',
+  freeDoc?.exists ? `${freeDoc.data().method}/${freeDoc.data().status}` : 'missing'
+)
+
+// Redeem → license issuance (pick a product the user does not own yet).
+const ownedSnap = await db.collection('licenses').where('user_id', '==', uid).where('status', '==', 'active').get()
+const owned = new Set(ownedSnap.docs.map((d) => d.data().product_id))
+const redeemTarget = [DEMO_PRODUCT, PRODUCT].find((id) => !owned.has(id)) ?? null
+const REDEEM = 'E2E-REDEEM-01'
+let rd = {}
+if (redeemTarget) {
+  await db.collection('redeem_codes').doc(REDEEM).set({
+    code: REDEEM,
+    product_id: redeemTarget,
+    product_name: 'E2E Test Product',
+    max_uses: 1,
+    used_count: 0,
+    expires_at: null,
+    active: true,
+    created_at: new Date().toISOString()
+  })
+  rd = await j(await postAuth('redeem', { code: REDEEM }, idToken))
+  check(
+    'redeem → license key issued',
+    rd.ok === true && /^PFT-([A-Z0-9]{4}-){3}[A-Z0-9]{4}$/.test(rd.license_key ?? ''),
+    `${rd.license_key ?? rd.code} (${redeemTarget})`
+  )
+  const rdLic = rd.license_key ? await db.collection('licenses').where('key', '==', rd.license_key).get() : null
+  const rdOrder = rd.order_id ? await db.collection('orders').doc(rd.order_id).get() : null
+  check(
+    'redeem created license + approved ৳0 order',
+    Boolean(rdLic?.docs.length) &&
+      Boolean(rdOrder?.exists) &&
+      rdOrder.data().status === 'approved' &&
+      rdOrder.data().amount === 0,
+    `license=${rdLic?.docs.length ? 'yes' : 'no'} order=${rdOrder?.exists ? `${rdOrder.data().status}/৳${rdOrder.data().amount}` : 'missing'}`
+  )
+  const rd2 = await j(await postAuth('redeem', { code: REDEEM }, idToken))
+  check(
+    'second redeem of same code → 400',
+    ['invalid_code', 'already_redeemed'].includes(rd2.code),
+    rd2.code
+  )
+} else {
+  const rdUnknown = await j(await postAuth('redeem', { code: 'E2E-NO-SUCH-CODE' }, idToken))
+  check('unknown redeem code → 404 not_found', rdUnknown.code === 'not_found', rdUnknown.code)
+  console.log('    (issuance check skipped — user already owns both test products)')
+}
+
+// Cleanup: remove every document this section seeded.
+try {
+  if (halfOrder.orderId) await db.collection('orders').doc(halfOrder.orderId).delete()
+  if (freeOrder.orderId) await db.collection('orders').doc(freeOrder.orderId).delete()
+  if (rd?.order_id) await db.collection('orders').doc(rd.order_id).delete()
+  if (rd?.license_key) {
+    const rows = await db.collection('licenses').where('key', '==', rd.license_key).get()
+    await Promise.all(rows.docs.map((d) => d.ref.delete()))
+  }
+  await db.collection('coupons').doc(HALF).delete()
+  await db.collection('coupons').doc(FULL).delete()
+  await db.collection('redeem_codes').doc(REDEEM).delete()
+  check('cleanup of seeded test data', true)
+} catch (err) {
+  check('cleanup of seeded test data', false, err instanceof Error ? err.message : String(err))
 }
 
 // ── Summary ────────────────────────────────────────────────────────────────

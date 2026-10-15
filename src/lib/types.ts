@@ -10,7 +10,8 @@ export interface Profile {
 }
 
 export type OrderStatus = 'pending' | 'approved' | 'rejected'
-export type PaymentMethod = 'bkash' | 'nagad'
+/** 'free' = no payment needed (0-price product or full coupon) — auto-approved. */
+export type PaymentMethod = 'bkash' | 'nagad' | 'free'
 
 export interface Product {
   id: string
@@ -39,6 +40,10 @@ export interface Order {
   trx_id: string
   status: OrderStatus
   created_at: string
+  /** Present when the order used a coupon. */
+  coupon_code?: string | null
+  original_price?: number
+  discount?: number
   product?: Product | null
   buyer?: Pick<Profile, 'email' | 'full_name'> | null
 }
@@ -71,4 +76,32 @@ export interface LicenseDevice {
 export interface SiteSettingsRow {
   key: string
   value: string
+}
+
+/** Discount code — doc id == normalized code (admin CRUD, server-validated). */
+export interface Coupon {
+  id: string
+  code: string
+  type: 'percent' | 'fixed'
+  value: number
+  /** 0 = unlimited uses. */
+  max_uses: number
+  used_count: number
+  /** ISO timestamp (end of expiry day, Asia/Dhaka) or null = never. */
+  expires_at: string | null
+  active: boolean
+  created_at: string
+}
+
+/** Free-access code — redeeming issues a license + auto-approved ৳0 order. */
+export interface RedeemCode {
+  id: string
+  code: string
+  product_id: string
+  product_name: string | null
+  max_uses: number
+  used_count: number
+  expires_at: string | null
+  active: boolean
+  created_at: string
 }

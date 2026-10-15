@@ -13,12 +13,15 @@ import { DashboardOverview } from './pages/dashboard/Overview'
 import { MyLicense } from './pages/dashboard/MyLicense'
 import { Purchases } from './pages/dashboard/Purchases'
 import { Orders } from './pages/dashboard/Orders'
+import { Redeem } from './pages/dashboard/Redeem'
 import { AdminOverview } from './pages/admin/Overview'
 import { AdminOrders } from './pages/admin/Orders'
 import { AdminProducts } from './pages/admin/Products'
 import { AdminLicenses } from './pages/admin/Licenses'
 import { AdminUsers } from './pages/admin/Users'
 import { AdminSettings } from './pages/admin/Settings'
+import { AdminCoupons } from './pages/admin/Coupons'
+import { AdminRedeemCodes } from './pages/admin/RedeemCodes'
 
 export default function App(): JSX.Element {
   return (
@@ -89,6 +92,7 @@ export default function App(): JSX.Element {
             <Route path="license" element={<MyLicense />} />
             <Route path="purchases" element={<Purchases />} />
             <Route path="orders" element={<Orders />} />
+            <Route path="redeem" element={<Redeem />} />
           </Route>
 
           {/* Admin panel */}
@@ -103,6 +107,8 @@ export default function App(): JSX.Element {
             <Route index element={<AdminOverview />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="products" element={<AdminProducts />} />
+            <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="redeem-codes" element={<AdminRedeemCodes />} />
             <Route path="licenses" element={<AdminLicenses />} />
             <Route path="users" element={<AdminUsers />} />
             <Route path="settings" element={<AdminSettings />} />
