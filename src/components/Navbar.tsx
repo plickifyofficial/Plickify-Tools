@@ -36,30 +36,24 @@ export function Navbar(): JSX.Element {
 
         <nav className="hidden items-center gap-1 sm:flex">
           <NavLink to="/" className={linkClass} end>
-            <i className="fa-solid fa-house mr-1.5 text-xs" aria-hidden="true" />
             Home
           </NavLink>
           <NavLink to="/tools" className={linkClass}>
-            <i className="fa-solid fa-store mr-1.5 text-xs" aria-hidden="true" />
             Tools
           </NavLink>
           <NavLink to="/about" className={linkClass}>
-            <i className="fa-solid fa-circle-info mr-1.5 text-xs" aria-hidden="true" />
             About
           </NavLink>
           <NavLink to="/contact" className={linkClass}>
-            <i className="fa-solid fa-envelope mr-1.5 text-xs" aria-hidden="true" />
             Contact
           </NavLink>
           {session && (
             <NavLink to="/dashboard" className={linkClass}>
-              <i className="fa-solid fa-gauge mr-1.5 text-xs" aria-hidden="true" />
               Dashboard
             </NavLink>
           )}
           {isAdmin && (
             <NavLink to="/admin" className={linkClass}>
-              <i className="fa-solid fa-shield-halved mr-1.5 text-xs" aria-hidden="true" />
               Admin
             </NavLink>
           )}
